@@ -7,138 +7,121 @@
 #include <sys/mman.h>
 #include <string.h>
 #include <fcntl.h>
+#include <time.h>
 
-struct chunk *heap = NULL;
+t_heap heap = {0, 0, 0, 0};
+size_t heap_size = INIT_CHUNK_SIZE;
 
-
-size_t heap_size = 4096;
-
-#define CHUNK_SIZE sizeof(struct chunk)
-
-struct chunk *init_heap()
-{
-	if (heap == NULL)
-	{
-		heap = (struct chunk*) mmap((void*)(BASE_CHUNK_ADDR), 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-
-		heap->size = heap_size - sizeof(struct chunk);
-		heap->flags = FREE;
-	}
-	return heap;
-}
-//4:15:00
-struct chunk *get_free_chunk_raw(size_t s)
-{
-	for (struct chunk *item = heap;
-			(size_t)item < (size_t)heap + heap_size;
-			item = (struct chunk *)((size_t)item + item->size + sizeof(struct chunk))
-	)
-	{
-		if (item->flags == FREE && item->size >= s)
-			return item;
-	}
-	return NULL;
-}
-//04:22:49
-struct chunk *get_last_chunk_raw()
-{
-	for (
-		struct chunk *item = heap;
-		(size_t)item < (size_t)heap + heap_size;
-		item = (struct chunk*)((size_t)item + sizeof(struct chunk)+item->size)
-
-	)
-	{
-		printf("Last chunk check %p size %lu - flag %u\n", item, item->size, item->flags);
-		if ((size_t)item+sizeof(struct chunk)+item->size>=(size_t)heap+heap_size)
-		{
-			printf("ret %p\n", item);
-			return item;
-		}
-		printf("skip\n");
-	}
-	return NULL;
+size_t generate_canary(void) {
+    size_t canary = 0;
+    srand(time(NULL));
+    for (int i = 0; i < 8; i++)
+        canary += (rand() % 256) * (i + 1);
+    return canary;
 }
 
-struct chunk *get_free_chunk(size_t s)
-{
-	if (heap == NULL)
-		heap = init_heap();
-	printf("HEAP %p\n", heap);
-	struct chunk *item=get_free_chunk_raw(s);
-	if (item == NULL)
-	{
-		printf("HERE %p S %lu\n", item, s);
-		//Manque d espace memoire... REMAP!!!
-		size_t tot_chunk = s+sizeof(struct chunk);//TOTAL CHUNKS
-		size_t old_size = heap_size;
-		size_t delta_size=((tot_chunk/4096)+((tot_chunk%4096!=0)?1:0))*4096;//Nombre total de memoire qui a ete rajouter
-		struct chunk *last_item=get_last_chunk_raw();
-		heap_size += delta_size;
-		printf("HEAP new size %lu\n", heap_size);
-		struct chunk *new_heap = mremap(heap, old_size, heap_size, MREMAP_MAYMOVE);
-		printf("HEAP resized %p\n", new_heap);
-		if (new_heap != heap)
-			return NULL;
-		printf("LAST_SIZE %lu - %p\n", delta_size, last_item);
-		last_item->size+=delta_size;
-		printf("last chunk resized %p: %lu\n", last_item, last_item->size);
-		item=get_free_chunk_raw(s);
-		printf("item chunk %p\n", item);
-	}
-	return item;
+t_chunk* manage_memory(t_chunk *item, size_t base_addr, size_t old_size, size_t size) {
+    t_chunk *new_heap = NULL;
+    int new_size = size;
+
+    if (!item && size > SMALL_MAX) {
+        // FAIRE UN MMAP JUST POUR UNE STRUCTURE
+    } else if (!item) {
+        // FAIRE UN MMAP D UNE POOL DE STRUCTURE POUR LES SMALL ET LES TINY
+    }
+
+    if (!item->addr) {
+        // SOIT IL RESTE DES STRUCTURES MAIS PLUS D ESPACE MEMOIRE, SOIT LE CHUNK DE METADATA VIEN D ETRE CREER
+        item->addr = (void*) mmap((void*)(base_addr), new_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    } else if (size <= item->size) {
+        new_size = size + old_size;
+        new_heap = mremap(item->base_addr, old_size, new_size, 0);
+        if (new_heap == MAP_FAILED) {
+            new_size = size;
+            item->next->addr = (void*) mmap((void*)(base_addr), new_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+            if (new_heap == MAP_FAILED) {
+                item->next->addr = NULL;
+                return NULL;
+            }
+            item->next->prev = item;
+            item = item->next;
+            item->next = NULL;
+            item->base_addr = new_heap;
+        }
+    }
+    return item;
 }
 
-void *my_malloc(size_t size)
-{
-	(void)size;
-	void *ptr;
-	//get free chunk
-	struct chunk *ch = get_free_chunk(size);
-	printf("chunk %p\n", ch);
-	//split chunk
-	ptr=(void*)((size_t)ch + sizeof(struct chunk));
-	printf("ptr %p\n", ptr);
-	//get end chunk
-	struct chunk *end = (struct chunk*)((size_t)ptr+size);
-	printf("end %p\n", end);
-	end->flags=FREE;
-	end->size=ch->size-(sizeof(struct chunk) + size);
-	//Assign free chunk
-	ch->flags=BUSY;
-	ch->size=size;
-	return ptr;
+int init_heap() {
+    if (heap.init == 0) {
+        heap.init = 1;
+
+        heap.tiny = (t_chunk*) mmap((void*)(BASE_CHUNK_ADDR), TOTAL_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+        if (heap.tiny == MAP_FAILED)
+            return 1;
+
+        heap.small = (void*)((size_t)heap.tiny + TINY_CHUNK_SIZE);
+        heap.large = (void*)((size_t)heap.small + SMALL_CHUNK_SIZE);
+
+        heap.tiny->addr = heap.large + LARGE_CHUNK_SIZE;
+        heap.tiny->size = TINY_MEMORY_SIZE;
+        heap.tiny->flag = FREE;
+        heap.tiny->canary = generate_canary();
+
+        heap.small->addr = heap.tiny->addr + TINY_MEMORY_SIZE;
+        heap.small->size = SMALL_MEMORY_SIZE;
+        heap.small->flag = FREE;
+        heap.small->canary = generate_canary();
+    }
+    return 0;
 }
 
-void my_free(void *ptr)
-{
-    // Marquez le chunk comme libre
-    struct chunk *ch = (struct chunk *)((size_t)ptr-sizeof(struct chunk));
-	// ??? si ptr c est n importe quoi ?
-	//TODO: lookp ptr?
-    ch->flags = FREE;
-	// merge les blocks consecutifs
-	for (
-		struct chunk *item = heap;
-		(size_t)item < (size_t)heap + heap_size;
-		item = (struct chunk*)((size_t)item + sizeof(struct chunk)+item->size)
+t_chunk* search_free_chunk(size_t s) {
+    t_chunk *item = NULL;
+    if (s <= SMALL_MAX) {
+        item = s <= TINY_MAX ? heap.tiny : heap.small;
+        while (item) {
+            if (item->flag == FREE && item->size >= s)
+                return item;
+            item = item->next;
+        }
+    }
+    return NULL;
+}
 
-	)
-	{
-		printf("Chunk check %p size %lu - flag %u\n", item, item->size, item->flags);
-		if (item->flags == FREE)
-		{
-			//voir les blocs consecutifs
-			struct chunk *end = item;
-			size_t new_size = item->size;
-			while (end->flags == FREE && (size_t)end+sizeof(struct chunk)+end->size < (size_t)heap+heap_size)
-			{
-				end=(struct chunk*)((size_t)end+sizeof(struct chunk)+end->size);
-				if (end->flags == FREE)
-					new_size+=sizeof(struct chunk)+end->size;
-				printf("new size: %lu consecutive chunk %p size %lu - flag %u\n", new_size, end, end->size, end->flags);
-			}
-			item->size = new_size;
-		}
-	}
+t_chunk* init_chunks(size_t size) {
+    t_chunk *item = NULL;
+    if (size <= SMALL_MAX) {
+        item = size <= TINY_MAX ? heap.tiny : heap.small;
+    } else {
+        item = heap.large;
+    }
+    while (item && item->next)
+        item = item->next;
+    item = manage_memory(item, 4092, 0, size);
+    return item;
+}
+
+t_chunk* get_free_chunk(size_t s) {
+    if (init_heap()) {
+        return NULL;
+    }
+    t_chunk *item = search_free_chunk(s);
+    return item;
+}
+
+void* my_malloc(size_t size) {
+    t_chunk *ch = get_free_chunk(size);
+    if (ch == NULL) {
+        return NULL;
+    }
+    void *ptr = ch->addr;
+    ch->flag = BUSY;
+    ch->size = size;
+    return ptr;
+}
+
+void my_free(void *ptr) {
+    (void)ptr;
+    // Implementation de my_free
 }
