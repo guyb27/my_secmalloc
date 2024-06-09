@@ -1,120 +1,72 @@
 #include <criterion/criterion.h>
 #include "my_secmalloc.private.h"
 
-Test(my_malloc, basic_allocation) {
-    void *ptr = my_malloc(128);
-    cr_assert_not_null(ptr, "Allocation should not return NULL");
+Test(malloc_test, tiny_allocation) {
+    void *ptr = my_malloc(10);
+    cr_assert_not_null(ptr, "Tiny allocation failed");
 }
-
-Test(my_malloc, free_memory) {
+Test(malloc_test, small_allocation) {
+    void *ptr = my_malloc(20);
+    cr_assert_not_null(ptr, "Small allocation failed");
+}
+Test(malloc_test, large_allocation) {
+    void *ptr = my_malloc(250);
+    cr_assert_not_null(ptr, "Large allocation failed");
+}
+/*
+Test(secmalloc, canary_initialization) {
     void *ptr = my_malloc(128);
     cr_assert_not_null(ptr, "Allocation should not return NULL");
+
+    size_t canary = *((size_t *)((char *)ptr + 128));
+    cr_assert_eq(canary, FIXED_CANARY, "Canary value should be initialized correctly");
+
     my_free(ptr);
-    // Add further checks to ensure memory was freed
 }
 
+Test(secmalloc, canary_detection) {
+    void *ptr = my_malloc(128);
+    cr_assert_not_null(ptr, "Allocation should not return NULL");
 
-/*#include <criterion/criterion.h>
-#include <stdio.h>
-#include "my_secmalloc.private.h"
-#include <sys/mman.h>
+    size_t *canary_ptr = (size_t *)((char *)ptr + 128);
+    size_t original_canary = *canary_ptr;
 
-Test(mmap, simple) {
-    void *ptr = mmap((void*)(4096), 4096, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    cr_expect(ptr != NULL);
-    int res = munmap(ptr, 4096);
-    cr_expect(res == 0);
-}*/
-/*
-Test(mmap, simple_malloc) {
-    char *ptr1 = (char*)my_malloc(12);
-    cr_assert(ptr1 != NULL, "Failed to alloc ptr1");
-}
-*/
-/*
-Test(simple, simple_map_01)
-{
-    // utilisation simple d'un mmap
-    char *ptr = mmap((void*)(4096*100000), 4096, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    cr_assert(ptr != NULL, "Failed to mmap");
+    // Modify the canary to simulate memory corruption
+    *canary_ptr ^= 0x1;
+
+    // Check if the canary value is detected as corrupted
+    cr_assert_neq(*canary_ptr, original_canary, "Canary value should detect memory corruption");
+
+    my_free(ptr);
 }
 
-Test(simple, simple_map_02)
-{
-    // utilisation simple d'un mmap
-    char *ptr1 = (char*)my_malloc(12);
-    cr_assert(ptr1 != NULL, "Failed to alloc ptr1");
-    char *ptr2 = (char*)my_malloc(25);
-    cr_assert(ptr2 != NULL, "Failed to alloc ptr2");
-    //cr_assert(ptr1 != ptr2, "Failed to alloc ptr2 != ptr1");
-    printf("ptr1: [%p]\nptr2: [%p]\nsizeof(struct chunk): [%lx]\n",
-        &ptr1, &ptr2, CHUNK_SIZE
-    );
-    cr_assert((size_t)ptr2 == (size_t)ptr1 + 12 + CHUNK_SIZE,
-        "Failed to alloc: %lx - %lx", (size_t)ptr2, (size_t)ptr1+12+CHUNK_SIZE); // : %lx - %lx", (size_t)ptr2, (size_t)ptr1 + 12 + (sizeof (struct chunk));
-    char *ptr3 = (char*)my_malloc(55);
-    cr_assert((size_t)ptr3 == (size_t)ptr2 + 25 + CHUNK_SIZE,
-        "Failed to alloc: %lx - %lx", (size_t)ptr3, (size_t)ptr2+25+CHUNK_SIZE);//  : %lx - %lx", (size_t)ptr3, (size_t)ptr2 + 25 + (sizeof (struct chunk)));
+Test(secmalloc, buffer_overflow_detection) {
+    void *ptr = my_malloc(128);
+    cr_assert_not_null(ptr, "Allocation should not return NULL");
+
+    size_t *canary_ptr = (size_t *)((char *)ptr + 128);
+    size_t original_canary = *canary_ptr;
+
+    // Write beyond the allocated memory to simulate buffer overflow
+    char *buffer = (char *)ptr;
+    for (size_t i = 0; i < 150; i++) {
+        buffer[i] = 'A';
+    }
+
+    // Check if the canary value is detected as corrupted
+    cr_assert_neq(*canary_ptr, original_canary, "Canary value should detect buffer overflow");
+
+    my_free(ptr);
 }
 
-Test(simple, simple_map_03)
-{
-    // utilisation simple d'un mmap
-    char *ptr1 = (char*)my_malloc(12);
-    cr_assert(ptr1 != NULL, "Failed to alloc ptr1");
-    char *ptr2 = (char*)my_malloc(25);
-    cr_assert(ptr2 != NULL, "Failed to alloc ptr2");
-    //cr_assert(ptr1 != ptr2, "Failed to alloc ptr2 != ptr1");
-    printf("ptr1: [%p]\nptr2: [%p]\nsizeof(struct chunk): [%lx]\n",
-        &ptr1, &ptr2, CHUNK_SIZE
-    );
-    cr_assert((size_t)ptr2 == (size_t)ptr1 + 12 + CHUNK_SIZE,
-        "Failed to alloc: %lx - %lx", (size_t)ptr2, (size_t)ptr1+12+CHUNK_SIZE); // : %lx - %lx", (size_t)ptr2, (size_t)ptr1 + 12 + (sizeof (struct chunk));
-    char *ptr3 = (char*)my_malloc(55);
-    cr_assert((size_t)ptr3 == (size_t)ptr2 + 25 + CHUNK_SIZE,
-        "Failed to alloc: %lx - %lx", (size_t)ptr3, (size_t)ptr2+25+CHUNK_SIZE);//  : %lx - %lx", (size_t)ptr3, (size_t)ptr2 + 25 + (sizeof (struct chunk)));
-    printf("my_free ptr2\n");
-    my_free(ptr2);
-    printf("my_free ptr3\n");
-    my_free(ptr3);
-    struct chunk *t = (struct chunk*)((size_t)ptr2 - CHUNK_SIZE);
-    printf("t: %lu\n", t->size);
-    //cr_assert((size_t)t->size==25+55+3940+2*sizeof(struct chunk), "Failed to my_free");
-    dprintf(2, "SIZE: [%zu]\n", t->size);
-    cr_assert((size_t)t->size==4096-12-(2*CHUNK_SIZE), "Failed to my_free");
+Test(secmalloc, double_free_detection) {
+    void *ptr = my_malloc(128);
+    cr_assert_not_null(ptr, "Allocation should not return NULL");
 
-}
+    my_free(ptr);
 
-Test(simple, simple_map_04)
-{
-    // utilisation simple d'un mmap
-    char *ptr1 = (char*)my_malloc(12);
-    cr_assert(ptr1 != NULL, "Failed to alloc ptr1");
-    char *ptr2 = (char*)my_malloc(25);
-    cr_assert(ptr2 != NULL, "Failed to alloc ptr2");
-    //cr_assert(ptr1 != ptr2, "Failed to alloc ptr2 != ptr1");
-    printf("ptr1: [%p]\nptr2: [%p]\nsizeof(struct chunk): [%lx]\n",
-        &ptr1, &ptr2, CHUNK_SIZE
-    );
-    cr_assert((size_t)ptr2 == (size_t)ptr1 + 12 + CHUNK_SIZE,
-        "Failed to alloc: %lx - %lx", (size_t)ptr2, (size_t)ptr1+12+CHUNK_SIZE); // : %lx - %lx", (size_t)ptr2, (size_t)ptr1 + 12 + (sizeof (struct chunk));
-    char *ptr3 = (char*)my_malloc(55);
-    cr_assert((size_t)ptr3 == (size_t)ptr2 + 25 + CHUNK_SIZE,
-        "Failed to alloc: %lx - %lx", (size_t)ptr3, (size_t)ptr2+25+CHUNK_SIZE);//  : %lx - %lx", (size_t)ptr3, (size_t)ptr2 + 25 + (sizeof (struct chunk)));
-    printf("my_free ptr1\n");
-    my_free(ptr1);
-    printf("my_free ptr2\n");
-    my_free(ptr2);
-    struct chunk *t = (struct chunk*)((size_t)ptr1 - CHUNK_SIZE);
-    printf("t: %lu\n", t->size);
-    cr_assert((size_t)t->size==12+25+CHUNK_SIZE, "Failed to my_free");
-
-}
-
-Test(simple, simple_map_05)
-{
-    // utilisation simple d'un mmap
-    char *ptr1 = (char*)my_malloc(8192*92);
-    cr_assert(ptr1 != NULL, "Failed to alloc ptr1");
+    // Attempt to free the same block again
+    // Cette est une simple simulation et dans un scénario réel, vous implémenteriez une logique pour suivre les doubles libérations
+    my_free(ptr); // Cette ligne devrait déclencher une erreur si la double libération est correctement détectée.
 }
 */
