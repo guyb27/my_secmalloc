@@ -1,18 +1,48 @@
 #include <criterion/criterion.h>
 #include "my_secmalloc.private.h"
-
-Test(malloc_test, tiny_allocation) {
+/*
+Test(malloc_test, basic_allocation) {
     void *ptr = my_malloc(10);
-    cr_assert_not_null(ptr, "Tiny allocation failed");
+    cr_assert_not_null(ptr, "Basic allocation failed");
 }
-Test(malloc_test, small_allocation) {
-    void *ptr = my_malloc(20);
-    cr_assert_not_null(ptr, "Small allocation failed");
+
+*/
+
+Test(malloc_test, multiple_allocation) {
+    void *ptr = my_malloc(10);
+    void *ptr2 = my_malloc(10);
+    void *ptr3 = my_malloc(10);
+    cr_assert_not_null(ptr, "Basic Multiple ptr is NULL");
+    cr_assert_not_null(ptr2, "Basic multiple ptr2 is NULL");
+    cr_assert_neq(ptr, ptr2, "Basic multiple ptr and ptr2 are equal");
+    dprintf(2, "ptr:[%p], ptr2:[%p], ptr3:[%p]\n", ptr, ptr2, ptr3);
+    cr_assert_eq(ptr+10+8, ptr2, "Basic multiple ptr+10 not equal to ptr2");
 }
-Test(malloc_test, large_allocation) {
-    void *ptr = my_malloc(250);
-    cr_assert_not_null(ptr, "Large allocation failed");
+
+Test(malloc_test, canary_detection) {
+    void *ptr = my_malloc(10);
+    void *ptr2 = my_malloc(108);
+    void *ptr3 = my_malloc(2);
+    size_t *canary_ptr = (size_t *)((char *)ptr + 10);
+    cr_assert_eq(*canary_ptr, FIXED_CANARY, "ptr Canary value is incorrect");
+    canary_ptr = (size_t *)((char *)ptr2 + 108);
+    cr_assert_eq(*canary_ptr, FIXED_CANARY, "ptr2 Canary value is incorrect");
+    canary_ptr = (size_t *)((char *)ptr3 + 12);
+    cr_assert_eq(*canary_ptr, FIXED_CANARY, "ptr3 Canary value is incorrect");
 }
+
+
+
+
+/*
+Test(malloc_test, basic_multiple_allocation) {
+    void *ptr = my_malloc(10);
+    void *ptr2 = my_malloc(10);
+
+    cr_assert_not_null(ptr2, "Basic multiple allocation failed");
+    cr_assert_neq(ptr, ptr2, "Canary value should detect memory corruption");
+}
+*/
 /*
 Test(secmalloc, canary_initialization) {
     void *ptr = my_malloc(128);
