@@ -1,0 +1,6 @@
+[V] Ajouter la variable next_mmap_addr
+[V] Ajouter la structure t_mmap_info
+[ ] Integrer la structure t_mmap_info
+[V] Faire le mmap correctement
+[ ] Faire le mremap correctement (Il faut integrer la structure t_mmap_info avant)
+[ ] Mettre les bonnes adresses au bon endroit

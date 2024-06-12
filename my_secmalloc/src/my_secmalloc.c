@@ -21,6 +21,8 @@ static size_t page_size;
 static size_t meta_size;
 static int log_fd = -1;
 
+size_t next_mmap_addr = BASE_ADDR;
+
 bool b_isBusy = false;
 
 void init_log()
@@ -113,20 +115,22 @@ int init_my_malloc()
 
     my_log("[INFO] - Initializing data and metadata pools.\n");
 
-    meta_head = mmap(NULL, meta_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    meta_head = mmap((void*)(next_mmap_addr), POOL_METADATA_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (meta_head == MAP_FAILED)
     {
         my_log("[ERROR] - Failed to map metadata pool: %d\n", errno);
         return 1;
     }
+    next_mmap_addr+=meta_size;
     my_log("[INFO] - Data pool created at address %p\n", meta_head);
 
-    datapool_ptr = mmap(meta_head, page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    datapool_ptr = mmap((void*)(next_mmap_addr), POOL_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (datapool_ptr == MAP_FAILED)
     {
         my_log("[ERROR] - Failed to map data pool: %d\n", errno);
         return 1;
     }
+    next_mmap_addr+=page_size;
     my_log("[INFO] - Metadata pool created at address %p\n", datapool_ptr);
 
     // Filling our chunk
@@ -245,6 +249,8 @@ void* my_malloc(size_t size)
             my_log("[ERROR] - Attempt to use mremap to expand data pool failed: %d\n", errno);
             return NULL;
         }
+        if (datapool_ptr + page_size > next_mmap_addr)
+            next_mmap_addr = datapool_ptr + page_size;
         page_size = page_size + new_datapool_len;
     }
 
@@ -253,12 +259,15 @@ void* my_malloc(size_t size)
     if (meta_segments_number >= meta_size)
     {
         my_log("[INFO] - Metadata pool need more space, growing data pool at %p from %zu bytes to %zu bytes.\n", meta_head, meta_size, meta_size + (meta_size*1000));
-        meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_MAYMOVE);
+        //meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_MAYMOVE);
+        meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_FIXED);
         if (meta_head == MAP_FAILED)
         {
             my_log("[ERROR] - Attempt to use mremap to expand metadata pool failed: %d\n", errno);
             return NULL;
         }
+        if (datapool_ptr + page_size > next_mmap_addr)
+            next_mmap_addr = datapool_ptr + page_size;
         meta_size = meta_size + (meta_size * 1000);
     }
     add_heap_metadata_segment(current_meta, size);

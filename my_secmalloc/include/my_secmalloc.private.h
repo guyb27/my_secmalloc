@@ -4,6 +4,15 @@
 #define META_SIZE sizeof(struct Heap_Metadata_Infos)
 #define CANARY_SIZE sizeof(int)
 
+#define PAGE_SIZE 4096
+
+#define BASE_ADDR PAGE_SIZE
+
+//#define POOL_METADATA_SIZE PAGE_SIZE*(10000)
+#define POOL_METADATA_SIZE PAGE_SIZE*(100)
+//#define POOL_MEMORY_SIZE PAGE_SIZE*100000
+#define POOL_MEMORY_SIZE PAGE_SIZE*1000
+
 typedef enum {
     FREE,
     BUSY
