@@ -91,6 +91,7 @@ void check_memory_leaks()
 }
 
 unsigned int generate_random_uint()
+  
 {
     int fd = open("/dev/urandom", O_RDONLY);
     unsigned int ui64_random_val;
@@ -267,11 +268,13 @@ void* my_malloc(size_t size)
     }
     current_meta = meta_head;
     my_log("[INFO] - Looking for free metadata area to allocate.\n");
+
     while (current_meta && current_meta->next)
     {
         if (current_meta->state == FREE && current_meta->size >= (size + CANARY_SIZE))
         {
             my_log("[INFO] - Metadata at %p for data at %p in datapool is free with %zu bytes availables.\n", current_meta, current_meta->data_ptr, current_meta->size);
+
             break;
         }
         current_meta = current_meta->next;
@@ -334,7 +337,7 @@ void my_free(void* ptr) {
 
     current_meta->state = FREE;
     current_meta->data_ptr = NULL;
-    
+
     // Combine adjacent free blocks
     if (current_meta->next != NULL && current_meta->next->state == FREE) {
         current_meta->size += current_meta->next->size;
@@ -364,8 +367,8 @@ void *my_calloc(size_t nmemb, size_t size)
     void* ptr = my_malloc(total_size);
     if (ptr != NULL)
     {
-        my_log("[INFO] - Initializing memory block with 0s at %p.\n", ptr);           
-        char* byte_ptr = (char*) ptr;           
+        my_log("[INFO] - Initializing memory block with 0s at %p.\n", ptr);
+        char* byte_ptr = (char*) ptr;
         for (i = 0; i < size; i++)
             byte_ptr[i] = 0;
     }
@@ -427,34 +430,3 @@ void *my_realloc(void *ptr, size_t size)
     my_log("== END REALLOC ==\n");
     return new_ptr;
 }
-
-#if DYNAMIC
-
-PUBLIC void *malloc(size_t size) {
-    my_log("[INFO] - malloc called with size %zu.\n", size);
-    void *ptr = my_malloc(size);
-    my_log("[INFO] - malloc returning pointer %p.\n", ptr);
-    return ptr;
-}
-
-PUBLIC void free(void *ptr) {
-    my_log("[INFO] - free called with pointer %p.\n", ptr);
-    my_free(ptr);
-    my_log("[INFO] - free completed for pointer %p.\n", ptr);
-}
-
-PUBLIC void *calloc(size_t nmemb, size_t size) {
-    my_log("[INFO] - calloc called avec nmemb %zu et size %zu.\n", nmemb, size);
-    void *ptr = my_calloc(nmemb, size);
-    my_log("[INFO] - calloc returning pointer %p.\n", ptr);
-    return ptr;
-}
-
-PUBLIC void *realloc(void *ptr, size_t size) {
-    my_log("[INFO] - realloc called with pointer %p et size %zu.\n", ptr, size);
-    void *new_ptr = my_realloc(ptr, size);
-    my_log("[INFO] - realloc returning pointer %p.\n", new_ptr);
-    return new_ptr;
-}
-
-#endif

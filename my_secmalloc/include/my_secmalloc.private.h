@@ -35,4 +35,11 @@ int add_heap_metadata_segment(HeapMetadataInfos current_metadata, int size);
 void check_memory_leaks();
 unsigned int generate_random_uint();
 
+
+extern size_t next_mmap_addr;
+extern bool b_isBusy;
+extern size_t page_size;
+extern size_t meta_size;
+extern int log_fd;
+
 #endif
