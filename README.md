@@ -5,6 +5,7 @@ date: N/A
 tags:
   - Programming
   - C
+  - Linux
 ---
 
 # my_secmalloc
