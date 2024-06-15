@@ -166,7 +166,7 @@ int add_heap_metadata_segment(HeapMetadataInfos current_meta, int size) {
     my_log("[INFO] - Add metadata segment at %p.\n", current_meta);
     HeapMetadataInfos next_struct;
     size_t size_with_padding = next_hexa_base(size);
-    size_t total_size = size_with_padding + CANARY_SIZE;
+    //size_t total_size = size_with_padding + CANARY_SIZE;
     
     next_struct = (HeapMetadataInfos)(next_meta_ptr);
     next_meta_ptr += sizeof(Heap_Metadata_Infos);
@@ -261,8 +261,8 @@ void* my_malloc(size_t size)
             my_log("[ERROR] - Attempt to use mremap to expand data pool failed: %d\n", errno);
             return NULL;
         }
-        if (datapool_ptr + page_size > next_mmap_addr)
-            next_mmap_addr = datapool_ptr + page_size;
+        if ((size_t)datapool_ptr + page_size > next_mmap_addr)
+    		next_mmap_addr = (size_t)datapool_ptr + page_size;
         page_size = page_size + new_datapool_len;
     }
 
@@ -305,8 +305,8 @@ void* my_malloc(size_t size)
             printf("KOKOKOK else tmp_meta != meta_head\n");
            // exit(1);
         }
-        if (datapool_ptr + page_size > next_mmap_addr)
-            next_mmap_addr = datapool_ptr + page_size;
+        if ((size_t)datapool_ptr + page_size > next_mmap_addr)
+    		next_mmap_addr = (size_t)datapool_ptr + page_size;
         meta_size += POOL_METADATA_SIZE;
 
         current_meta = meta_head;
