@@ -15,15 +15,29 @@
 #include "my_secmalloc.private.h"
 
 // GLOBALS
-static HeapMetadataInfos meta_head = NULL;
-static void *datapool_ptr = NULL;
-static size_t page_size;
-static size_t meta_size;
-static int log_fd = -1;
+//static HeapMetadataInfos meta_head = NULL;
+//static void *datapool_ptr = NULL;
+//static size_t page_size;
+//static size_t meta_size;
+//static int log_fd = -1;
+
+HeapMetadataInfos meta_head = NULL;
+void *datapool_ptr = NULL;
+size_t page_size;
+size_t meta_size;
+void *next_meta_ptr = NULL;
+
+int log_fd = -1;
 
 size_t next_mmap_addr = BASE_ADDR;
 
-bool b_isBusy = false;
+//bool b_isBusy = false;
+
+
+size_t            next_hexa_base(size_t size)
+{
+    return (size % 16 ? size + 16 - (size % 16) : size);
+}
 
 void init_log()
 {
@@ -109,18 +123,19 @@ int init_my_malloc()
 {
     int i64_page_amount = 400;
     page_size = getpagesize() * i64_page_amount;
-    meta_size = META_SIZE * 100000;
+    meta_size = POOL_METADATA_SIZE;
 
     atexit(check_memory_leaks);
 
     my_log("[INFO] - Initializing data and metadata pools.\n");
 
-    meta_head = mmap((void*)(next_mmap_addr), POOL_METADATA_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    meta_head = mmap((void*)(next_mmap_addr), meta_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (meta_head == MAP_FAILED)
     {
         my_log("[ERROR] - Failed to map metadata pool: %d\n", errno);
         return 1;
     }
+    next_meta_ptr = meta_head+ sizeof(Heap_Metadata_Infos);
     next_mmap_addr+=meta_size;
     my_log("[INFO] - Data pool created at address %p\n", meta_head);
 
@@ -137,7 +152,7 @@ int init_my_malloc()
     meta_head->size = page_size;
     meta_head->next = NULL;
     meta_head->prev = NULL;
-    meta_head->state = BUSY;
+    meta_head->state = FREE;
     meta_head->data_ptr = datapool_ptr;
     meta_head->i64_canary = 0;
 
@@ -147,43 +162,47 @@ int init_my_malloc()
     return 0;
 }
 
-int add_heap_metadata_segment(HeapMetadataInfos new_current_meta, int size) {
-    my_log("[INFO] - Add metadata segment at %p.\n", new_current_meta);
-    HeapMetadataInfos data_left;
+int add_heap_metadata_segment(HeapMetadataInfos current_meta, int size) {
+    my_log("[INFO] - Add metadata segment at %p.\n", current_meta);
+    HeapMetadataInfos next_struct;
+    size_t size_with_padding = next_hexa_base(size + CANARY_SIZE);
     
-    data_left = (HeapMetadataInfos)((char*)new_current_meta + META_SIZE);
+    next_struct = (HeapMetadataInfos)(next_meta_ptr);
+    next_meta_ptr += sizeof(Heap_Metadata_Infos);
 
-    data_left->size = new_current_meta->size - (size + CANARY_SIZE);
+    next_struct->size = current_meta->size - size_with_padding;
 
-    new_current_meta->size = size + CANARY_SIZE;
+    current_meta->size = size_with_padding;
 
-    data_left->data_ptr = (char*)new_current_meta->data_ptr + size + CANARY_SIZE;
+    next_struct->data_ptr = (char*)current_meta->data_ptr + size_with_padding;
 
-    data_left->state = BUSY;
-    new_current_meta->state = FREE;
+    next_struct->state = FREE;
+    current_meta->state = BUSY;
 
     // We update the pointers of our metadata blocks
-    data_left->next = new_current_meta->next;
-    if (new_current_meta->next != NULL)
-        new_current_meta->next->prev = data_left;
-    new_current_meta->next = data_left;
-    data_left->prev = new_current_meta;
+    next_struct->next = current_meta->next;
+    current_meta->next = next_struct;
+    next_struct->prev = current_meta;
+    //my_log("[INFO] - END Add metadata segment at %p.\n", current_meta);
+    if (next_struct->next != NULL)
+        next_struct->next->prev = next_struct;
+    //data_right->next = new_current_meta->next;
+    //data_right->next = new_current_meta->next;
+    //if (current_meta->next != NULL)
+    //    current_meta->next->prev = data_right;
+    //current_meta->next = data_right;
+    //data_right->prev = current_meta;
 
-    new_current_meta->i64_canary = generate_random_uint();
-    *((int*)((char*)new_current_meta->data_ptr + size)) = new_current_meta->i64_canary;
-    
+    current_meta->i64_canary = generate_random_uint();
+    *((int*)((char*)current_meta->data_ptr + size_with_padding)) = current_meta->i64_canary;
     return 0;
 }
 
-size_t            next_hexa_base(size_t size)
-{
-    return (size % 16 ? size + 16 - (size % 16) : size);
-}
 
 void* my_malloc(size_t size)
 {
     //bool b_isIterating;
-    size = next_hexa_base(size);
+    //size = next_hexa_base(size);
     my_log("== BEGIN MALLOC ==\n");
     my_log("[INFO] - MALLOC called with size %zu.\n", size);
 
@@ -194,7 +213,7 @@ void* my_malloc(size_t size)
     }
 
     // if our data pool and our metadata pool is not yet created, then we create it before using malloc
-    if (b_isBusy == false)
+    if (!meta_head)
     {
         int res = init_my_malloc();
         if (res != 0)
@@ -202,8 +221,6 @@ void* my_malloc(size_t size)
             my_log("[ERROR] - Unable to spawn a pool: %d\n", errno);
             exit(EXIT_FAILURE);
         }
-
-        b_isBusy = true;
     }
 
     if (meta_head == NULL)
@@ -222,8 +239,8 @@ void* my_malloc(size_t size)
     while (current_meta)
     {
         //meta_segments_number++;
-
-        if (current_meta->state && current_meta->size >= (size + CANARY_SIZE))
+        //printf("current_meta->state: [%s], current_meta->size: [%zu], (size + CANARY_SIZE): [%zu] \n", current_meta->state ==FREE? "FREE":"BUSY", current_meta->size, (size_t)(size + CANARY_SIZE));
+        if (current_meta->state == FREE && current_meta->size >= (size + CANARY_SIZE))
         {
             my_log("[INFO] - Metadata at %p for data at %p in datapool is free with %zu bytes availables.\n", current_meta, current_meta->data_ptr, current_meta->size);
 
@@ -242,12 +259,13 @@ void* my_malloc(size_t size)
         //else
           //  b_isIterating = false;
     }
-    my_log("[INFO] - No available existing block found.\n");
+    //my_log("[INFO] - No available existing block found.\n");
 
     my_log("[INFO] - Checking data pool size to know if it needs to grows.\n");
     if (current_meta->size < size)
     {
         size_t new_datapool_len = page_size + getpagesize();
+        dprintf(2, "DATAPOOL RESIZE");
         my_log("[INFO] - Data pool need more space, growing data pool at %p from %zu bytes to %zu bytes.\n", datapool_ptr, page_size, new_datapool_len);
         datapool_ptr = mremap(datapool_ptr, page_size, new_datapool_len, MREMAP_MAYMOVE);
         if (datapool_ptr == MAP_FAILED)
@@ -264,18 +282,23 @@ void* my_malloc(size_t size)
     my_log("[INFO] - Checking metadata pool size to know if it needs to grows.\n");
     HeapMetadataInfos tmp_meta = meta_head;
     meta_segments_number = 0;
+    size_t actual_meta_size=0;
+
     while (tmp_meta)
     {
-        meta_segments_number+=1;
+        meta_segments_number++;
+        actual_meta_size+=sizeof(Heap_Metadata_Infos);
         tmp_meta = tmp_meta->next;
     }
+    if (actual_meta_size >= meta_size)
     //if (meta_segments_number >= POOL_METADATA_SIZE / meta_size)
-    if (meta_segments_number >= meta_size)
+    //if (meta_segments_number >= meta_size)
     {
+        dprintf(1,"NOUVEAU MMAP\n");
         my_log("[INFO] - Metadata pool need more space, growing data pool at %p from %zu bytes to %zu bytes.\n", meta_head, meta_size, meta_size + (meta_size*1000));
         //meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_MAYMOVE);
         tmp_meta = meta_head;
-        meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_MAYMOVE);
+        meta_head = mremap(meta_head, meta_size, meta_size + POOL_METADATA_SIZE, MREMAP_MAYMOVE);
         if (meta_head == MAP_FAILED)
         {
 
@@ -286,16 +309,25 @@ void* my_malloc(size_t size)
         if (tmp_meta != meta_head)
         {
             printf("KOKOKOK tmp_meta != meta_head\n");
-            exit(1);
+            memcpy(tmp_meta, meta_head, meta_size);
+            //exit(1);
         }
         else
         {
             printf("KOKOKOK else tmp_meta != meta_head\n");
-            exit(1);
+           // exit(1);
         }
         if (datapool_ptr + page_size > next_mmap_addr)
             next_mmap_addr = datapool_ptr + page_size;
-        meta_size = meta_size + (meta_size * 1000);
+        meta_size += POOL_METADATA_SIZE;
+
+        current_meta = meta_head;
+        while (current_meta)//A refactoriser
+        {
+            if (current_meta->state && current_meta->size >= (size + CANARY_SIZE))
+                break;
+            current_meta=current_meta->next;
+        }
     }
     add_heap_metadata_segment(current_meta, size);
 
