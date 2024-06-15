@@ -12,7 +12,12 @@ Projet en C répliquant les fonctionnalités de malloc de manière sécurisée a
 
 ## Comment setup le projet
 ### Pré-requis
-(TO-DO)
+Il vous sera nécessaire de vérifier que chacun de ces outils sont installés sur votre appareil :
+- [git](https://git-scm.com/download/win)
+- [make](https://cmake.org/download/)
+- [criterion](https://criterion.readthedocs.io/en/master/setup.html) build et installé dans le `/usr` avec ses dépendances
+- [gef](https://github.com/hugsy/gef) et [valgrind](https://valgrind.org/downloads/current.html) pour le debugging et qui vous seront donc d'une grande aide si vous souhaitez contribuer au projet
 
 ## Ressources utilisées
-(TO-DO)
+- [malloc()](https://linux.die.net/man/3/malloc), [calloc()](https://linux.die.net/man/3/malloc), [realloc()](https://linux.die.net/man/3/malloc), et [free()](https://linux.die.net/man/3/malloc)
+- [malloc internals](https://sourceware.org/glibc/wiki/MallocInternals)

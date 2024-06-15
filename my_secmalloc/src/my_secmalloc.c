@@ -15,26 +15,33 @@
 #include "my_secmalloc.private.h"
 
 // GLOBALS
-static HeapMetadataInfos meta_head = NULL;
-static void *datapool_ptr = NULL;
+//static HeapMetadataInfos meta_head = NULL;
+//static void *datapool_ptr = NULL;
+//static size_t page_size;
+//static size_t meta_size;
+//static int log_fd = -1;
 
-size_t page_size;
-size_t meta_size;
-size_t next_mmap_addr = BASE_ADDR;
+HeapMetadataInfos meta_head = NULL;
+void *datapool_ptr = NULL;
+size_t page_size = POOL_MEMORY_SIZE;
+size_t meta_size = POOL_METADATA_SIZE;
+size_t data_size;
+
+void *next_meta_ptr = NULL;
 int log_fd = -1;
-bool b_isBusy = false;
+size_t next_mmap_addr = BASE_ADDR;
 
 size_t            next_hexa_base(size_t size)
 {
-    return (size % 16 ? size + 16 - (size % 16) : size);
+    int base = 16;
+    return (size % base ? size + base - (size % base) : size);
 }
 
 void init_log()
 {
-    if (log_fd != -1) {
-        return; // Log already initialized
-    }
-
+    if (log_fd != -1)
+        return ;
+    
     const char *log_filename = getenv("MSM_OUTPUT");
     if (!log_filename)
     {
@@ -50,30 +57,27 @@ void init_log()
 
 void my_log(const char *format, ...)
 {
-    if (log_fd == -1)
-    {
-        init_log();
-    }
-
-    va_list args;
+    va_list args ;
     char *buffer;
-
+    size_t buffer_size;
+    
+    if (log_fd == -1)
+        init_log();
     va_start(args, format);
-    size_t buffer_size = vsnprintf(NULL, 0, format, args);
+    buffer_size = vsnprintf(NULL, 0, format, args);
     va_end(args);
-
     buffer = alloca(buffer_size + 2);
     va_start(args, format);
     vsnprintf(buffer, buffer_size + 2, format, args);
     va_end(args);
-
     write(log_fd, buffer, buffer_size);
 }
 
 void check_memory_leaks()
 {
-    my_log("== BEGIN CHECK FOR MEMORY LEAK ==\n");
     HeapMetadataInfos current_meta = meta_head;
+
+    my_log("== BEGIN CHECK FOR MEMORY LEAK ==\n");
     while (current_meta != NULL)
     {
         if (current_meta->state == BUSY)
@@ -87,115 +91,168 @@ void check_memory_leaks()
 }
 
 unsigned int generate_random_uint()
+  
 {
     int fd = open("/dev/urandom", O_RDONLY);
-    if (fd == -1) {
-        my_log("[ERROR] - Unable to open /dev/urandom!\n");
-        exit(EXIT_FAILURE);
-    }
-
     unsigned int ui64_random_val;
-    if (lseek(fd, -4, SEEK_END) == -1) {
+
+    if (fd == -1)
+    {
+        my_log("[ERROR] - Unable to open /dev/urandom!\n");
+        close(fd);
+        exit(EXIT_FAILURE);
+    }
+    if (lseek(fd, -4, SEEK_END) == -1)
+    {
         my_log("[ERROR] - Unable to call lseek!\n");
+        close(fd);
         exit(EXIT_FAILURE);
     }
-
-    if (read(fd, &ui64_random_val, sizeof(ui64_random_val)) == -1) {
+    if (read(fd, &ui64_random_val, sizeof(ui64_random_val)) == -1)
+    {
         my_log("[ERROR] - Unable to read /dev/urandom!\n");
+        close(fd);
         exit(EXIT_FAILURE);
     }
-
     close(fd);
     return ui64_random_val;
 }
 
 int init_my_malloc()
 {
-    int i64_page_amount = 400;
-    page_size = getpagesize() * i64_page_amount;
-    meta_size = META_SIZE * 100000;
-
     atexit(check_memory_leaks);
-
     my_log("[INFO] - Initializing data and metadata pools.\n");
-
-    meta_head = mmap((void*)(next_mmap_addr), POOL_METADATA_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    meta_head = mmap((void*)(next_mmap_addr), meta_size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (meta_head == MAP_FAILED)
     {
         my_log("[ERROR] - Failed to map metadata pool: %d\n", errno);
         return 1;
     }
+    next_meta_ptr = meta_head+ sizeof(Heap_Metadata_Infos);
     next_mmap_addr+=meta_size;
     my_log("[INFO] - Data pool created at address %p\n", meta_head);
-
     datapool_ptr = mmap((void*)(next_mmap_addr), POOL_MEMORY_SIZE, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (datapool_ptr == MAP_FAILED)
     {
         my_log("[ERROR] - Failed to map data pool: %d\n", errno);
         return 1;
     }
-    next_mmap_addr+=page_size;
+    next_mmap_addr+=POOL_MEMORY_SIZE;
     my_log("[INFO] - Metadata pool created at address %p\n", datapool_ptr);
-
-    // Filling our chunk
-    meta_head->size = page_size;
+    meta_head->size = POOL_MEMORY_SIZE;
     meta_head->next = NULL;
     meta_head->prev = NULL;
-    meta_head->state = BUSY;
+    meta_head->state = FREE;
     meta_head->data_ptr = datapool_ptr;
     meta_head->i64_canary = 0;
-
     my_log("[INFO] - First metadata element created at address %p.\n", meta_head);
     my_log("[INFO] - Data and metadata pools initialization complete.\n");
-
     return 0;
 }
 
-int add_heap_metadata_segment(HeapMetadataInfos new_current_meta, int size) {
-    my_log("[INFO] - Add metadata segment at %p.\n", new_current_meta);
-    HeapMetadataInfos data_left;
-
-    data_left = (HeapMetadataInfos)((char*)new_current_meta + META_SIZE);
-
-    data_left->size = new_current_meta->size - (size + CANARY_SIZE);
-
-    new_current_meta->size = size + CANARY_SIZE;
-
-    data_left->data_ptr = (char*)new_current_meta->data_ptr + size + CANARY_SIZE;
-
-    data_left->state = BUSY;
-    new_current_meta->state = FREE;
-
-    // We update the pointers of our metadata blocks
-    data_left->next = new_current_meta->next;
-    if (new_current_meta->next != NULL)
-        new_current_meta->next->prev = data_left;
-    new_current_meta->next = data_left;
-    data_left->prev = new_current_meta;
-
-    new_current_meta->i64_canary = generate_random_uint();
-    *((int*)((char*)new_current_meta->data_ptr + size)) = new_current_meta->i64_canary;
-
+int add_heap_metadata_segment(HeapMetadataInfos current_meta, int size)
+{
+    HeapMetadataInfos next_struct;
+    size_t size_with_padding = size;
+    size_t total_size = size_with_padding + CANARY_SIZE;
+    
+    my_log("[INFO] - Add metadata segment at %p.\n", current_meta);
+    next_struct = (HeapMetadataInfos)(next_meta_ptr);
+    next_meta_ptr += sizeof(Heap_Metadata_Infos);
+    next_struct->size = current_meta->size - size_with_padding;
+    current_meta->size = size_with_padding;
+    next_struct->data_ptr = (char*)current_meta->data_ptr + size_with_padding;
+    next_struct->state = FREE;
+    current_meta->state = BUSY;
+    next_struct->next = current_meta->next;
+    current_meta->next = next_struct;
+    next_struct->prev = current_meta;
+    if (next_struct->next != NULL)
+        next_struct->next->prev = next_struct;
+    current_meta->i64_canary = generate_random_uint();
+    *((int*)((char*)current_meta->data_ptr + size_with_padding)) = current_meta->i64_canary;
+    my_log("[INFO] - END Add metadata segment at %p.\n", current_meta);
     return 0;
+}
+
+Heap_Metadata_Infos *create_a_new_metadata_struct(Heap_Metadata_Infos *current_meta)
+{
+    HeapMetadataInfos tmp_meta = meta_head;
+
+    my_log("[INFO] - Metadata pool need more space, growing data pool at %p from %zu bytes to %zu bytes.\n", meta_head, meta_size, meta_size + POOL_METADATA_SIZE);
+    meta_head = mremap(meta_head, meta_size, meta_size + POOL_METADATA_SIZE, MREMAP_MAYMOVE);
+    if (meta_head == MAP_FAILED)
+    {
+        my_log("[ERROR] - Attempt to use mremap to expand metadata pool failed: %d\n", errno);
+        exit(EXIT_FAILURE);
+    }
+    if (tmp_meta != meta_head)
+    {
+        memcpy(tmp_meta, meta_head, meta_size);
+        current_meta = meta_head + (current_meta - tmp_meta);
+    }
+    meta_size += POOL_METADATA_SIZE;
+    next_mmap_addr = meta_head + meta_size;
+    tmp_meta = current_meta + sizeof(Heap_Metadata_Infos);
+    current_meta->next = tmp_meta;
+    tmp_meta->prev=current_meta;
+    tmp_meta->next=NULL;
+    tmp_meta->i64_canary = 0x0;
+    tmp_meta->state = FREE;
+    tmp_meta->size = 0x0;
+    tmp_meta->data_ptr = 0x0;
+    return tmp_meta;
+}
+
+Heap_Metadata_Infos *get_new_data_memory(Heap_Metadata_Infos *current_meta, size_t size)
+{
+    HeapMetadataInfos tmp_meta = meta_head;
+
+    while (size > current_meta->size)
+    {
+        Heap_Metadata_Infos *ret = NULL;
+
+        my_log("[INFO] - Checking data pool size to know if it needs to grows.\n");
+        size_t new_datapool_len = page_size + POOL_MEMORY_SIZE;
+        my_log("[INFO] - Data pool need more space, growing data pool at %p from %zu bytes to %zu bytes.\n", datapool_ptr, page_size, new_datapool_len);
+        void *tmp_datapool = datapool_ptr;
+        datapool_ptr = mremap(datapool_ptr, page_size, new_datapool_len, MREMAP_MAYMOVE);
+        if (datapool_ptr == MAP_FAILED)
+        {
+            my_log("[ERROR] - Attempt to use mremap to expand data pool failed: %d\n", errno);
+            return NULL;
+        }
+        if (tmp_datapool != datapool_ptr)
+        {
+            memcpy(tmp_datapool, datapool_ptr, page_size);
+            //MISE A JOUR DES ADDRESS DANS LES STRUCTS
+            while (tmp_meta)
+            {
+                tmp_meta->data_ptr = (tmp_meta->data_ptr - tmp_datapool) + datapool_ptr;
+                tmp_meta = tmp_meta->next;
+            }
+        }
+        page_size += POOL_MEMORY_SIZE;
+        if (datapool_ptr + page_size > next_mmap_addr)
+            next_mmap_addr = datapool_ptr + page_size;
+        current_meta->size += POOL_METADATA_SIZE;
+    }
+    return current_meta;
 }
 
 void* my_malloc(size_t size)
 {
-  	size = next_hexa_base(size); // alignement sur 16 octets pour éviter les erreurs de segmentation sur les architectures 64 bits
+    HeapMetadataInfos current_meta = NULL;
 
-    bool b_isIterating;
-
+    size = next_hexa_base(size);
     my_log("== BEGIN MALLOC ==\n");
     my_log("[INFO] - MALLOC called with size %zu.\n", size);
-
     if ((int) size <= 0)
     {
         my_log("[ERROR] - size doesn't possess a valid value.\n");
         return NULL;
     }
-
-    // if our data pool and our metadata pool is not yet created, then we create it before using malloc
-    if (b_isBusy == false)
+    if (!meta_head)
     {
         int res = init_my_malloc();
         if (res != 0)
@@ -203,81 +260,30 @@ void* my_malloc(size_t size)
             my_log("[ERROR] - Unable to spawn a pool: %d\n", errno);
             exit(EXIT_FAILURE);
         }
-
-        b_isBusy = true;
     }
-
     if (meta_head == NULL)
     {
         my_log("[ERROR] - Unable to read metadata: %d\n", errno);
         exit(EXIT_FAILURE);
     }
-
-    // Looking for a free metadata to allocate the new zone
+    current_meta = meta_head;
     my_log("[INFO] - Looking for free metadata area to allocate.\n");
 
-    HeapMetadataInfos current_meta = meta_head;
-    b_isIterating = true;
-    size_t meta_segments_number = 0;
-
-    while (b_isIterating == true)
+    while (current_meta && current_meta->next)
     {
-        meta_segments_number++;
-
-        if (current_meta->state && current_meta->size >= (size + CANARY_SIZE))
+        if (current_meta->state == FREE && current_meta->size >= (size + CANARY_SIZE))
         {
             my_log("[INFO] - Metadata at %p for data at %p in datapool is free with %zu bytes availables.\n", current_meta, current_meta->data_ptr, current_meta->size);
 
-            // split memory if necessary
-            if (current_meta->size > (size + CANARY_SIZE))
-                add_heap_metadata_segment(current_meta, size);
-
-            my_log("== END MALLOC ==\n");
-            // Return a pointer to the allocated area (after the metadata)
-            return current_meta->data_ptr;
+            break;
         }
-
-        if (current_meta->next != NULL && current_meta->next != current_meta)
-            current_meta = current_meta->next;
-        else
-            b_isIterating = false;
+        current_meta = current_meta->next;
     }
-    my_log("[INFO] - No available existing block found.\n");
-
-    my_log("[INFO] - Checking data pool size to know if it needs to grows.\n");
-    if (current_meta->size < size)
-    {
-        size_t new_datapool_len = page_size + getpagesize();
-        my_log("[INFO] - Data pool need more space, growing data pool at %p from %zu bytes to %zu bytes.\n", datapool_ptr, page_size, new_datapool_len);
-        datapool_ptr = mremap(datapool_ptr, page_size, new_datapool_len, MREMAP_MAYMOVE);
-        if (datapool_ptr == MAP_FAILED)
-        {
-            my_log("[ERROR] - Attempt to use mremap to expand data pool failed: %d\n", errno);
-            return NULL;
-        }
-        if ((size_t)datapool_ptr + page_size > next_mmap_addr)
-    		next_mmap_addr = (size_t)datapool_ptr + page_size;
-        page_size = page_size + new_datapool_len;
-    }
-
-    // expand the metadata pool if it is too small to access a new entry
-    my_log("[INFO] - Checking metadata pool size to know if it needs to grows.\n");
-    if (meta_segments_number >= meta_size)
-    {
-        my_log("[INFO] - Metadata pool need more space, growing data pool at %p from %zu bytes to %zu bytes.\n", meta_head, meta_size, meta_size + (meta_size*1000));
-        //meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_MAYMOVE);
-        meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_FIXED);
-        if (meta_head == MAP_FAILED)
-        {
-            my_log("[ERROR] - Attempt to use mremap to expand metadata pool failed: %d\n", errno);
-            return NULL;
-        }
-        if ((size_t)datapool_ptr + page_size > next_mmap_addr)
-    		next_mmap_addr = (size_t)datapool_ptr + page_size;
-        meta_size = meta_size + (meta_size * 1000);
-    }
+    if (current_meta->state == BUSY)
+        current_meta = create_a_new_metadata_struct(current_meta);
+    if (current_meta->size < size )
+        current_meta = get_new_data_memory(current_meta, size);
     add_heap_metadata_segment(current_meta, size);
-
     my_log("== END MALLOC ==\n");
     return current_meta->data_ptr;
 }
@@ -315,9 +321,12 @@ void my_free(void* ptr) {
         return;
     }
 
-    int *i64_canary_ptr = (int*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE);
-    int i64_canary = *i64_canary_ptr;
-    if (current_meta->i64_canary != i64_canary) {
+    //long *i64_canary_ptr = (long*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE);
+    //long i64_canary = *i64_canary_ptr;
+
+    long canary = *((long*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE));
+    //long i64_canary = *i64_canary_ptr;
+    if (current_meta->i64_canary != canary) {
         my_log("[ERROR] - Heap overflow detected at %p!\n", ptr);
         my_log("== END FREE ==\n");
         return;
@@ -375,55 +384,49 @@ void *my_realloc(void *ptr, size_t size)
 
     if(ptr == NULL)
     {
-        my_log("[INFO] - NULL pointer (%p).\n", ptr);
+        my_log("[INFO] - NULL pointer (%p).\n");
         my_log("[INFO] - MALLOC used with size %zu.\n", size);
         new_ptr = my_malloc(size);
         if (new_ptr == NULL)
-        {
-            my_log("[ERROR] - Malloc failed.\n");
             return NULL;
-        }
-        my_log("== END REALLOC ==\n");
+
         return new_ptr;
     }
     else if(size == 0)
     {
-        my_log("[INFO] - Size is 0, pointer freed (%p).\n", ptr);
+        my_log("[INFO] - Size is 0, pointer freed.\n");
         my_free(ptr);
-        my_log("== END REALLOC ==\n");
         return NULL;
     }
 
-    // Search for the metadata associated with this pointer
+    // search for the metadata associated with this pointer
     HeapMetadataInfos metadata = meta_head;
     while (metadata != NULL && metadata->data_ptr != ptr)
         metadata = metadata->next;
 
-    // Check that the pointer passed as a parameter is valid
+    // check that the pointer passed as a parameter is valid
     if (metadata == NULL)
     {
-        my_log("[ERROR] - Invalid pointer (%p) given to realloc. Realloc aborted!\n", ptr);
+        my_log("[ERROR] Invalid pointer (%p) given to realloc. realloc aborted!\n", ptr);
         return NULL;
     }
 
     new_ptr = my_malloc(size);
-    if(new_ptr == NULL)
+    if(new_ptr == NULL) 
     {
-        my_log("[ERROR] - Malloc failed. Old pointer (%p) is not freed.\n", ptr);
+        my_free(ptr);
         return NULL;
     }
 
     // Copy old data from old address to new address
     char *data = (char*) metadata->data_ptr;
     char *new_data = (char*) new_ptr;
-    // If the new size is larger than the old size, the added memory will not be initialized
-    size_t copy_size = (metadata->size < size) ? metadata->size : size;
-    memcpy(new_data, data, copy_size);
+    memcpy(new_data, data, metadata->size);
 
-    // Free the memory located at the old address
-    my_log("[INFO] - Memory located at old address %p is freed.\n", ptr);
+    // We free the memory located at the old address
+    my_log("[INFO] - Memory located to old address %p is freed.\n", ptr);
     my_free(ptr);
-
+    
     my_log("== END REALLOC ==\n");
     return new_ptr;
 }
