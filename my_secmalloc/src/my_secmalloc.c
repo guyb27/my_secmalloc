@@ -359,9 +359,9 @@ void my_free(void* ptr) {
     //long *i64_canary_ptr = (long*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE);
     //long i64_canary = *i64_canary_ptr;
 
-    long i64_canary = *((long*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE));
+    long canary = *((long*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE));
     //long i64_canary = *i64_canary_ptr;
-    if (current_meta->i64_canary != i64_canary) {
+    if (current_meta->i64_canary != canary) {
         my_log("[ERROR] - Heap overflow detected at %p!\n", ptr);
         my_log("== END FREE ==\n");
         return;
