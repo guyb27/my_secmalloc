@@ -1,6 +1,6 @@
 ---
 title: "my_secmalloc"
-description: "Outil répliquant le comportement de malloc de manière sécurisée"
+description: "Tool that replicates malloc behavior in a secure way"
 date: N/A
 tags:
   - Programming
@@ -9,56 +9,60 @@ tags:
 ---
 
 # my_secmalloc
-Projet en C répliquant les fonctionnalités de malloc de manière sécurisée afin de détecter l'exploitation de certaines vulnérabilités de type double free, heap overflow ou encore memory leak. 
+C project that securely replicates malloc functionality in order to detect the exploitation of certain vulnerabilities such as double free, heap overflow or memory leak.
 
-## Comment setup le projet
-### Pré-requis
-Il vous sera nécessaire de vérifier que chacun de ces outils sont installés sur votre appareil :
+## How to setup the project
+### Prerequisites
+You'll need to check that each of these tools is installed on your device:
 - [git](https://git-scm.com/download/win)
 - [make](https://cmake.org/download/)
-- [criterion](https://criterion.readthedocs.io/en/master/setup.html) build et installé dans le `/usr` avec ses dépendances
-- [gef](https://github.com/hugsy/gef) et [valgrind](https://valgrind.org/downloads/current.html) pour le debugging et qui vous seront donc d'une grande aide si vous souhaitez contribuer au projet
+- [criterion](https://criterion.readthedocs.io/en/master/setup.html) build and installed in `/usr` with its dependencies
+- [gef](https://github.com/hugsy/gef) and [valgrind](https://valgrind.org/downloads/current.html) for debugging, which will be a great help if you wish to contribute to the project.
 
-### Etapes pour construire le projet et utiliser l'allocateur
-#### Construction du projet
+### Steps to build the project and use the allocator
+#### How to build
 ```bash
 git clone git@github.com:guyb27/my_secmalloc.git
 cd my_secmalloc/my_secmalloc
 ```
-**Ensuite vous avez plusieurs options pour construire le projet :**
-- ``make static`` qui vous donnera la librairie statique ``libmy_secmalloc.a`` dans le dossier ``./build/lib``
-- ``make dynamic`` qui vous donnera la librairie dynamique ``libmy_secmalloc.so`` dans le dossier ``./build/lib``
-- ``make test`` qui vous donnera le binaire de test ``test`` dans le dossier ``./build/test``, il fonctionne grâce à la lib statique
-- ``make script`` qui vous donnera un script ``my_secmalloc.sh`` dans le dossier ``./build`` qui permet de lancer un programme avec l'allocateur sans besoin de spécifier ``LD_PRELOAD``
-- ``make all`` qui permet de construire les deux librairies et exécute par la même occasion les tests en construisant le binaire de test
-  *(actuellement le make all ne construit pas la librairie dynamique de la bonne manière, en effet si on fait un make all et regarde les symboles de
-   la librairie dynamique, on voit que les fonctions de malloc, free, realloc et calloc ne sont pas présentes, il faudra donc faire un make dynamic 
-   ou make clean dynamic (si la lib.so a déjà été build) pour avoir une librairie dynamique fonctionnelle, un correctif est en cours de développement)*
+**Then you have several options for building the project:**
+- ``make static`` which will give you the static library ``libmy_secmalloc.a`` in the ``./build/lib`` folder
+- ``make dynamic``, which gives you the dynamic library ``libmy_secmalloc.so`` in the ``./build/lib`` folder
+- ``make test`` which gives you the test binary ``test`` in the ``./build/test`` folder, it works thanks to the static lib
+- ``make script`` which will give you a ``my_secmalloc.sh`` script in the ``./build`` folder, allowing you to run a program with the allocator without having to specify ``LD_PRELOAD``.
+- ``make all``, which builds the two libraries and, at the same time, executes the tests by building the test binary.
+  *(actually, make all doesn't build the dynamic library in the right way.
+  dynamic library, you'll see that the malloc, free, realloc and calloc functions aren't present, so you'll need to do a make dynamic
+  or make clean dynamic (if lib.so has already been built) to get a working dynamic library (a patch is currently under development)*.
 
-#### Comment utiliser l'allocateur avec un utilitaire/programme ?
-Par défaut, le programme enregistre ses logs dans un fichier par défaut nommé ``default_log.txt``. Le fichier de log est déterminé grâce à la variable d'environnement ``MSM_OUTPUT`` que vous êtes libre de modifier.
+#### How to use the allocator with a utility/program?
+By default, the program saves its logs in a default file named ``default_log.txt``. The log file is determined by the ``MSM_OUTPUT`` environment variable, which you are free to modify.
 
-Il existe deux principales options pour utiliser l'allocateur avec un utilitaire/programme :
-- ``LD_PRELOAD`` qui permet de charger la librairie dynamique avant les autres librairies :
-```bash
-LD_PRELOAD=./build/lib/libmy_secmalloc.so sl
-```
+There are two main options for using the allocator with a utility/program:
+- ``LD_PRELOAD``, which loads the dynamic library before other libraries:
+````bash
+  LD_PRELOAD=./build/lib/libmy_secmalloc.so sl
+````
 
-- Utiliser le script à ``./build/my_secmalloc.sh`` ayant été créé via un ``make all`` ou ``make script`` qui permet de lancer un programme avec l'allocateur :
-```bash
+- Use the script at ``./build/my_secmalloc.sh`` having been created via a ``make all`` or ``make script`` which allows you to launch a program with the allocator:
+````bash
 ./build/my_secmalloc.sh python3
-```
-Pour l'instant le script n'est pas optimisé.
+````
+The script is currently not optimized.
 
 ## Troubleshooting
-### Résolutiion des problèmes de compilation
-- Si vous avez des erreurs de compilation, il est possible que vous n'ayez pas installé les dépendances nécessaires pour compiler le projet. 
-Vérifiez que vous avez bien installé les dépendances nécessaires pour compiler le projet.
-- Si vous vous retrouvez à faire un ``make test`` et que vous rencontrez un problème, assurez-vous d'avoir bien build la librairie statique permettant de faire fonctionner les tests.
-Il se peut également que vous devez faire un ``make clean`` avant de refaire un ``make test``.
-- A l'heure actuelle, la solution ne permet pas d'exécuter n'importe quelle programme, pensez donc à vérifier que vous avez bien les symboles malloc, calloc, realloc et free avec cette commande : 
-````
-nm libmy_secmalloc.so | grep " T " | grep -v my_ | cut -f3 -d' ' | sort
-## Ressources utilisées
-- [malloc()](https://linux.die.net/man/3/malloc), [calloc()](https://linux.die.net/man/3/malloc), [realloc()](https://linux.die.net/man/3/malloc), et [free()](https://linux.die.net/man/3/malloc)
+### Troubleshooting common problems
+- If you get compilation errors, you may not have installed the necessary dependencies to compile the project.
+  Check that you have installed the necessary dependencies to compile the project.
+- If you find yourself running a ``make test`` and encounter a problem, make sure you've built the static library needed to run the tests.
+  Make sure you've also installed criterion in `/usr` and its dependencies.
+  You may also need to perform a ``make clean`` before redoing a ``make test``.
+- At present, the solution does not allow you to run any program, so check that you have the malloc, calloc, realloc and free symbols with this command:
+  ``nm libmy_secmalloc.so | grep " T " | grep -v my_ | cut -f3 -d' ' | sort``. If you don't have these symbols, do a ``make clean`` and then a ``make dynamic``.
+- For any other error, don't hesitate to open an exit in accordance with the given template.
+
+## Resources used
+
+- [malloc()](https://linux.die.net/man/3/malloc), [calloc()](https://linux.die.net/man/3/malloc), [realloc()](https://linux.die.net/man/3/malloc), and [free()](https://linux.die.net/man/3/malloc)
 - [malloc internals](https://sourceware.org/glibc/wiki/MallocInternals)
+- [USENIX Security '18 - Guarder: A Tunable Secure Allocator](https://www.youtube.com/watch?v=Q26_z5oKTVA)
