@@ -3,33 +3,24 @@
 
 #include <stdlib.h>
 
-#ifdef __GNUC__
-#define EXPORT __attribute__((visibility("default")))
+// Define visibility for functions based on whether DYNAMIC is defined
+#ifdef DYNAMIC
+    void *malloc(size_t size);
+    void free(void *ptr);
+    void *calloc(size_t nmemb, size_t size);
+    void *realloc(void *ptr, size_t size);
+
+    // Alias the custom functions to standard names when DYNAMIC is defined
+    #define my_malloc malloc
+    #define my_free free
+    #define my_calloc calloc
+    #define my_realloc realloc
 #else
-#define EXPORT
+    // Define the custom memory allocation functions for testing
+    void *my_malloc(size_t size);
+    void my_free(void *ptr);
+    void *my_calloc(size_t nmemb, size_t size);
+    void *my_realloc(void *ptr, size_t size);
 #endif
-
-// Sélection entre les fonctions dynamiques (privées) et les fonctions de test (publiques)
-#if DYNAMIC
-    // Fonctions dynamiques (privées)
-    #define PRIVATE static
-    #define PUBLIC EXPORT
-#else
-    // Fonctions de test (publiques)
-    #define PRIVATE
-    #define PUBLIC EXPORT
-#endif
-
-// Déclarations des fonctions personnalisées
-PRIVATE void *my_malloc(size_t size);
-PRIVATE void my_free(void *ptr);
-PRIVATE void *my_calloc(size_t nmemb, size_t size);
-PRIVATE void *my_realloc(void *ptr, size_t size);
-
-// Déclarations des fonctions standard, toujours publiques
-PUBLIC void *malloc(size_t size);
-PUBLIC void free(void *ptr);
-PUBLIC void *calloc(size_t nmemb, size_t size);
-PUBLIC void *realloc(void *ptr, size_t size);
 
 #endif

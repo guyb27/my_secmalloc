@@ -17,12 +17,11 @@
 // GLOBALS
 static HeapMetadataInfos meta_head = NULL;
 static void *datapool_ptr = NULL;
-static size_t page_size;
-static size_t meta_size;
-static int log_fd = -1;
 
+size_t page_size;
+size_t meta_size;
 size_t next_mmap_addr = BASE_ADDR;
-
+int log_fd = -1;
 bool b_isBusy = false;
 
 size_t            next_hexa_base(size_t size)
@@ -35,7 +34,7 @@ void init_log()
     if (log_fd != -1) {
         return; // Log already initialized
     }
-    
+
     const char *log_filename = getenv("MSM_OUTPUT");
     if (!log_filename)
     {
@@ -155,7 +154,7 @@ int init_my_malloc()
 int add_heap_metadata_segment(HeapMetadataInfos new_current_meta, int size) {
     my_log("[INFO] - Add metadata segment at %p.\n", new_current_meta);
     HeapMetadataInfos data_left;
-    
+
     data_left = (HeapMetadataInfos)((char*)new_current_meta + META_SIZE);
 
     data_left->size = new_current_meta->size - (size + CANARY_SIZE);
@@ -176,7 +175,7 @@ int add_heap_metadata_segment(HeapMetadataInfos new_current_meta, int size) {
 
     new_current_meta->i64_canary = generate_random_uint();
     *((int*)((char*)new_current_meta->data_ptr + size)) = new_current_meta->i64_canary;
-    
+
     return 0;
 }
 
@@ -216,11 +215,11 @@ void* my_malloc(size_t size)
 
     // Looking for a free metadata to allocate the new zone
     my_log("[INFO] - Looking for free metadata area to allocate.\n");
-    
+
     HeapMetadataInfos current_meta = meta_head;
     b_isIterating = true;
     size_t meta_segments_number = 0;
-    
+
     while (b_isIterating == true)
     {
         meta_segments_number++;
@@ -232,12 +231,12 @@ void* my_malloc(size_t size)
             // split memory if necessary
             if (current_meta->size > (size + CANARY_SIZE))
                 add_heap_metadata_segment(current_meta, size);
-            
+
             my_log("== END MALLOC ==\n");
             // Return a pointer to the allocated area (after the metadata)
             return current_meta->data_ptr;
         }
-        
+
         if (current_meta->next != NULL && current_meta->next != current_meta)
             current_meta = current_meta->next;
         else
@@ -256,8 +255,8 @@ void* my_malloc(size_t size)
             my_log("[ERROR] - Attempt to use mremap to expand data pool failed: %d\n", errno);
             return NULL;
         }
-        if (datapool_ptr + page_size > next_mmap_addr)
-            next_mmap_addr = datapool_ptr + page_size;
+        if ((size_t)datapool_ptr + page_size > next_mmap_addr)
+    		next_mmap_addr = (size_t)datapool_ptr + page_size;
         page_size = page_size + new_datapool_len;
     }
 
@@ -273,8 +272,8 @@ void* my_malloc(size_t size)
             my_log("[ERROR] - Attempt to use mremap to expand metadata pool failed: %d\n", errno);
             return NULL;
         }
-        if (datapool_ptr + page_size > next_mmap_addr)
-            next_mmap_addr = datapool_ptr + page_size;
+        if ((size_t)datapool_ptr + page_size > next_mmap_addr)
+    		next_mmap_addr = (size_t)datapool_ptr + page_size;
         meta_size = meta_size + (meta_size * 1000);
     }
     add_heap_metadata_segment(current_meta, size);
@@ -329,7 +328,7 @@ void my_free(void* ptr) {
 
     current_meta->state = FREE;
     current_meta->data_ptr = NULL;
-    
+
     // Combine adjacent free blocks
     if (current_meta->next != NULL && current_meta->next->state == FREE) {
         current_meta->size += current_meta->next->size;
@@ -359,8 +358,8 @@ void *my_calloc(size_t nmemb, size_t size)
     void* ptr = my_malloc(total_size);
     if (ptr != NULL)
     {
-        my_log("[INFO] - Initializing memory block with 0s at %p.\n", ptr);           
-        char* byte_ptr = (char*) ptr;           
+        my_log("[INFO] - Initializing memory block with 0s at %p.\n", ptr);
+        char* byte_ptr = (char*) ptr;
         for (i = 0; i < size; i++)
             byte_ptr[i] = 0;
     }
@@ -428,35 +427,3 @@ void *my_realloc(void *ptr, size_t size)
     my_log("== END REALLOC ==\n");
     return new_ptr;
 }
-
-
-#if DYNAMIC
-
-PUBLIC void *malloc(size_t size) {
-    my_log("[INFO] - malloc called with size %zu.\n", size);
-    void *ptr = my_malloc(size);
-    my_log("[INFO] - malloc returning pointer %p.\n", ptr);
-    return ptr;
-}
-
-PUBLIC void free(void *ptr) {
-    my_log("[INFO] - free called with pointer %p.\n", ptr);
-    my_free(ptr);
-    my_log("[INFO] - free completed for pointer %p.\n", ptr);
-}
-
-PUBLIC void *calloc(size_t nmemb, size_t size) {
-    my_log("[INFO] - calloc called avec nmemb %zu et size %zu.\n", nmemb, size);
-    void *ptr = my_calloc(nmemb, size);
-    my_log("[INFO] - calloc returning pointer %p.\n", ptr);
-    return ptr;
-}
-
-PUBLIC void *realloc(void *ptr, size_t size) {
-    my_log("[INFO] - realloc called with pointer %p et size %zu.\n", ptr, size);
-    void *new_ptr = my_realloc(ptr, size);
-    my_log("[INFO] - realloc returning pointer %p.\n", new_ptr);
-    return new_ptr;
-}
-
-#endif
