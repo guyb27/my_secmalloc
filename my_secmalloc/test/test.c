@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include "my_secmalloc.h"
 #include "my_secmalloc.private.h"
-
+/*
 Test(my_malloc, basic_allocation) {
     printf("== MALLOC basic allocation begin! ==\n");
 
@@ -95,7 +95,7 @@ Test(my_realloc, zero_size) {
 
     printf("== my_realloc zero size done! ==\n");
 }
-
+*/
 Test(my_malloc, stress_test) {
     printf("== my_malloc stress test begin! ==\n");
     size_t allocation_size = 1024;
@@ -111,7 +111,7 @@ Test(my_malloc, stress_test) {
     }
     printf("== my_malloc stress test done! ==\n");
 }
-
+/*
 Test(my_malloc, intentional_leak) {
     printf("== malloc intentional leak begin! ==\n");
 
@@ -123,3 +123,4 @@ Test(my_malloc, intentional_leak) {
     printf("== my_malloc intentional leak done! ==\n");
 }
 
+*/

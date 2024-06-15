@@ -25,11 +25,6 @@ size_t next_mmap_addr = BASE_ADDR;
 
 bool b_isBusy = false;
 
-size_t            next_hexa_base(size_t size)
-{
-    return (size % 16 ? size + 16 - (size % 16) : size);
-}
-
 void init_log()
 {
     if (log_fd != -1) {
@@ -180,12 +175,15 @@ int add_heap_metadata_segment(HeapMetadataInfos new_current_meta, int size) {
     return 0;
 }
 
+size_t            next_hexa_base(size_t size)
+{
+    return (size % 16 ? size + 16 - (size % 16) : size);
+}
+
 void* my_malloc(size_t size)
 {
-  	size = next_hexa_base(size); // alignement sur 16 octets pour éviter les erreurs de segmentation sur les architectures 64 bits
-
-    bool b_isIterating;
-
+    //bool b_isIterating;
+    size = next_hexa_base(size);
     my_log("== BEGIN MALLOC ==\n");
     my_log("[INFO] - MALLOC called with size %zu.\n", size);
 
@@ -218,30 +216,31 @@ void* my_malloc(size_t size)
     my_log("[INFO] - Looking for free metadata area to allocate.\n");
     
     HeapMetadataInfos current_meta = meta_head;
-    b_isIterating = true;
+    //b_isIterating = true;
     size_t meta_segments_number = 0;
     
-    while (b_isIterating == true)
+    while (current_meta)
     {
-        meta_segments_number++;
+        //meta_segments_number++;
 
         if (current_meta->state && current_meta->size >= (size + CANARY_SIZE))
         {
             my_log("[INFO] - Metadata at %p for data at %p in datapool is free with %zu bytes availables.\n", current_meta, current_meta->data_ptr, current_meta->size);
 
             // split memory if necessary
-            if (current_meta->size > (size + CANARY_SIZE))
-                add_heap_metadata_segment(current_meta, size);
+            //if (current_meta->size > (size + CANARY_SIZE))
+            //    add_heap_metadata_segment(current_meta, size);
             
-            my_log("== END MALLOC ==\n");
+            //my_log("== END MALLOC ==\n");
             // Return a pointer to the allocated area (after the metadata)
-            return current_meta->data_ptr;
+            //return current_meta->data_ptr;
+            break;
         }
         
-        if (current_meta->next != NULL && current_meta->next != current_meta)
+        //if (current_meta->next != NULL && current_meta->next != current_meta)
             current_meta = current_meta->next;
-        else
-            b_isIterating = false;
+        //else
+          //  b_isIterating = false;
     }
     my_log("[INFO] - No available existing block found.\n");
 
@@ -263,15 +262,36 @@ void* my_malloc(size_t size)
 
     // expand the metadata pool if it is too small to access a new entry
     my_log("[INFO] - Checking metadata pool size to know if it needs to grows.\n");
+    HeapMetadataInfos tmp_meta = meta_head;
+    meta_segments_number = 0;
+    while (tmp_meta)
+    {
+        meta_segments_number+=1;
+        tmp_meta = tmp_meta->next;
+    }
+    //if (meta_segments_number >= POOL_METADATA_SIZE / meta_size)
     if (meta_segments_number >= meta_size)
     {
         my_log("[INFO] - Metadata pool need more space, growing data pool at %p from %zu bytes to %zu bytes.\n", meta_head, meta_size, meta_size + (meta_size*1000));
         //meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_MAYMOVE);
-        meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_FIXED);
+        tmp_meta = meta_head;
+        meta_head = mremap(meta_head, meta_size, meta_size + (meta_size*1000), MREMAP_MAYMOVE);
         if (meta_head == MAP_FAILED)
         {
+
+            printf("KOKKOKO MAP_FAILED\n");
             my_log("[ERROR] - Attempt to use mremap to expand metadata pool failed: %d\n", errno);
             return NULL;
+        }
+        if (tmp_meta != meta_head)
+        {
+            printf("KOKOKOK tmp_meta != meta_head\n");
+            exit(1);
+        }
+        else
+        {
+            printf("KOKOKOK else tmp_meta != meta_head\n");
+            exit(1);
         }
         if (datapool_ptr + page_size > next_mmap_addr)
             next_mmap_addr = datapool_ptr + page_size;
@@ -376,59 +396,52 @@ void *my_realloc(void *ptr, size_t size)
 
     if(ptr == NULL)
     {
-        my_log("[INFO] - NULL pointer (%p).\n", ptr);
+        my_log("[INFO] - NULL pointer (%p).\n");
         my_log("[INFO] - MALLOC used with size %zu.\n", size);
         new_ptr = my_malloc(size);
         if (new_ptr == NULL)
-        {
-            my_log("[ERROR] - Malloc failed.\n");
             return NULL;
-        }
-        my_log("== END REALLOC ==\n");
+
         return new_ptr;
     }
     else if(size == 0)
     {
-        my_log("[INFO] - Size is 0, pointer freed (%p).\n", ptr);
+        my_log("[INFO] - Size is 0, pointer freed.\n");
         my_free(ptr);
-        my_log("== END REALLOC ==\n");
         return NULL;
     }
 
-    // Search for the metadata associated with this pointer
+    // search for the metadata associated with this pointer
     HeapMetadataInfos metadata = meta_head;
     while (metadata != NULL && metadata->data_ptr != ptr)
         metadata = metadata->next;
 
-    // Check that the pointer passed as a parameter is valid
+    // check that the pointer passed as a parameter is valid
     if (metadata == NULL)
     {
-        my_log("[ERROR] - Invalid pointer (%p) given to realloc. Realloc aborted!\n", ptr);
+        my_log("[ERROR] Invalid pointer (%p) given to realloc. realloc aborted!\n", ptr);
         return NULL;
     }
 
     new_ptr = my_malloc(size);
-    if(new_ptr == NULL)
+    if(new_ptr == NULL) 
     {
-        my_log("[ERROR] - Malloc failed. Old pointer (%p) is not freed.\n", ptr);
+        my_free(ptr);
         return NULL;
     }
 
     // Copy old data from old address to new address
     char *data = (char*) metadata->data_ptr;
     char *new_data = (char*) new_ptr;
-    // If the new size is larger than the old size, the added memory will not be initialized
-    size_t copy_size = (metadata->size < size) ? metadata->size : size;
-    memcpy(new_data, data, copy_size);
+    memcpy(new_data, data, metadata->size);
 
-    // Free the memory located at the old address
-    my_log("[INFO] - Memory located at old address %p is freed.\n", ptr);
+    // We free the memory located at the old address
+    my_log("[INFO] - Memory located to old address %p is freed.\n", ptr);
     my_free(ptr);
-
+    
     my_log("== END REALLOC ==\n");
     return new_ptr;
 }
-
 
 #if DYNAMIC
 
