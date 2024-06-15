@@ -35,6 +35,8 @@ cd my_secmalloc/my_secmalloc
   dynamic library, you'll see that the malloc, free, realloc and calloc functions aren't present, so you'll need to do a make dynamic
   or make clean dynamic (if lib.so has already been built) to get a working dynamic library (a patch is currently under development)*.
 
+You can also directly download the libraries on our repository [here](https://github.com/guyb27/my_secmalloc)!
+
 #### How to use the allocator with a utility/program?
 By default, the program saves its logs in a default file named ``default_log.txt``. The log file is determined by the ``MSM_OUTPUT`` environment variable, which you are free to modify.
 
@@ -56,7 +58,7 @@ The script is currently not optimized.
   Check that you have installed the necessary dependencies to compile the project.
 - If you find yourself running a ``make test`` and encounter a problem, make sure you've built the static library needed to run the tests.
   Make sure you've also installed criterion in `/usr` and its dependencies.
-  You may also need to perform a ``make clean`` before redoing a ``make test``.
+  You may also need to perform a ``make clean static`` before redoing a ``make test``.
 - At present, the solution does not allow you to run any program, so check that you have the malloc, calloc, realloc and free symbols with this command:
   ``nm libmy_secmalloc.so | grep " T " | grep -v my_ | cut -f3 -d' ' | sort``. If you don't have these symbols, do a ``make clean`` and then a ``make dynamic``.
 - For any other error, don't hesitate to open an exit in accordance with the given template.
