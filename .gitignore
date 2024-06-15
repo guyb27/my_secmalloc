@@ -1,0 +1,5 @@
+.idea/
+*/build/
+*.o
+test/test
+my_secmalloc/default_log.txt
