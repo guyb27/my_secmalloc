@@ -3,7 +3,7 @@
 
 //#define DYNAMIC true
 
-#define META_SIZE sizeof(struct Heap_Metadata_Infos)
+#define META_SIZE next_hexa_base(sizeof(struct Heap_Metadata_Infos))
 #define CANARY_SIZE sizeof(long)
 
 #define PAGE_SIZE 4096

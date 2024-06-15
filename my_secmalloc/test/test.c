@@ -122,3 +122,24 @@ Test(my_malloc, intentional_leak) {
 
     printf("== my_malloc intentional leak done! ==\n");
 }
+
+Test(malloc, free_and_reuse) {
+    printf("== malloc free and reuse begin! ==\n");
+
+    void *ptr = malloc(100);
+    printf("malloc(100) -> %p\n", ptr);
+    cr_expect(ptr != NULL, "malloc(100) failed");
+
+    free(ptr);
+    printf("free\n");
+
+    void *ptr2 = malloc(100);
+    printf("malloc(100) -> %p\n", ptr2);
+    cr_expect(ptr2 != NULL, "malloc(100) failed on reuse");
+    cr_expect(ptr == ptr2, "malloc(100) did not reuse the freed block");
+
+    free(ptr2);
+    printf("free\n");
+
+    printf("== malloc free and reuse done! ==\n");
+}

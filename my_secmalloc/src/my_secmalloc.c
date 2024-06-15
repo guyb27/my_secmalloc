@@ -356,8 +356,11 @@ void my_free(void* ptr) {
         return;
     }
 
-    int *i64_canary_ptr = (int*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE);
-    int i64_canary = *i64_canary_ptr;
+    //long *i64_canary_ptr = (long*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE);
+    //long i64_canary = *i64_canary_ptr;
+
+    long i64_canary = *((long*)((char*)current_meta->data_ptr + current_meta->size - CANARY_SIZE));
+    //long i64_canary = *i64_canary_ptr;
     if (current_meta->i64_canary != i64_canary) {
         my_log("[ERROR] - Heap overflow detected at %p!\n", ptr);
         my_log("== END FREE ==\n");
