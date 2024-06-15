@@ -50,6 +50,15 @@ LD_PRELOAD=./build/lib/libmy_secmalloc.so sl
 ```
 Pour l'instant le script n'est pas optimisé.
 
+## Troubleshooting
+### Résolutiion des problèmes de compilation
+- Si vous avez des erreurs de compilation, il est possible que vous n'ayez pas installé les dépendances nécessaires pour compiler le projet. 
+Vérifiez que vous avez bien installé les dépendances nécessaires pour compiler le projet.
+- Si vous vous retrouvez à faire un ``make test`` et que vous rencontrez un problème, assurez-vous d'avoir bien build la librairie statique permettant de faire fonctionner les tests.
+Il se peut également que vous devez faire un ``make clean`` avant de refaire un ``make test``.
+- A l'heure actuelle, la solution ne permet pas d'exécuter n'importe quelle programme, pensez donc à vérifier que vous avez bien les symboles malloc, calloc, realloc et free avec cette commande : 
+````
+nm libmy_secmalloc.so | grep " T " | grep -v my_ | cut -f3 -d' ' | sort
 ## Ressources utilisées
 - [malloc()](https://linux.die.net/man/3/malloc), [calloc()](https://linux.die.net/man/3/malloc), [realloc()](https://linux.die.net/man/3/malloc), et [free()](https://linux.die.net/man/3/malloc)
 - [malloc internals](https://sourceware.org/glibc/wiki/MallocInternals)
