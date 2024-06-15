@@ -192,7 +192,7 @@ Heap_Metadata_Infos *create_a_new_metadata_struct(Heap_Metadata_Infos *current_m
         current_meta = meta_head + (current_meta - tmp_meta);
     }
     meta_size += POOL_METADATA_SIZE;
-    next_mmap_addr = meta_head + meta_size;
+    next_mmap_addr = (size_t)meta_head + meta_size;
     tmp_meta = current_meta + sizeof(Heap_Metadata_Infos);
     current_meta->next = tmp_meta;
     tmp_meta->prev=current_meta;
@@ -233,8 +233,9 @@ Heap_Metadata_Infos *get_new_data_memory(Heap_Metadata_Infos *current_meta, size
             }
         }
         page_size += POOL_MEMORY_SIZE;
-        if (datapool_ptr + page_size > next_mmap_addr)
-            next_mmap_addr = datapool_ptr + page_size;
+        if ((size_t)datapool_ptr + page_size > next_mmap_addr)
+    		next_mmap_addr = (size_t)datapool_ptr + page_size;
+
         current_meta->size += POOL_METADATA_SIZE;
     }
     return current_meta;
