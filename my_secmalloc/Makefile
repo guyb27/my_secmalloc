@@ -50,7 +50,8 @@ test: static $(BUILD_DIR)/test/test
 # Compile and execute tests
 $(BUILD_DIR)/test/test: $(BUILD_DIR) $(LIB_DIR) $(OBJ_DIR) $(BUILD_DIR)/test $(OBJ_DIR)/my_secmalloc.o
 	$(CC) $(CFLAGS) -I$(INCLUDE_DIR) $(TEST_DIR)/test.c -L$(LIB_DIR) -lmy_secmalloc -lcriterion -Wl,-rpath,$(LIB_DIR) -o $@
-	LD_LIBRARY_PATH=$(LIB_DIR) ./$(BUILD_DIR)/test/test
+	LD_LIBRARY_PATH=$(LIB_DIR) ./$(BUILD_DIR)/test/test --coverage
+	gcovr .
 
 # Create necessary directories
 $(BUILD_DIR) $(LIB_DIR) $(OBJ_DIR) $(BUILD_DIR)/test:

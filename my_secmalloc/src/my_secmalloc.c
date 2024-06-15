@@ -25,6 +25,11 @@ size_t next_mmap_addr = BASE_ADDR;
 
 bool b_isBusy = false;
 
+size_t            next_hexa_base(size_t size)
+{
+    return (size % 16 ? size + 16 - (size % 16) : size);
+}
+
 void init_log()
 {
     if (log_fd != -1) {
@@ -177,6 +182,8 @@ int add_heap_metadata_segment(HeapMetadataInfos new_current_meta, int size) {
 
 void* my_malloc(size_t size)
 {
+  	size = next_hexa_base(size); // alignement sur 16 octets pour éviter les erreurs de segmentation sur les architectures 64 bits
+
     bool b_isIterating;
 
     my_log("== BEGIN MALLOC ==\n");
@@ -369,52 +376,59 @@ void *my_realloc(void *ptr, size_t size)
 
     if(ptr == NULL)
     {
-        my_log("[INFO] - NULL pointer (%p).\n");
+        my_log("[INFO] - NULL pointer (%p).\n", ptr);
         my_log("[INFO] - MALLOC used with size %zu.\n", size);
         new_ptr = my_malloc(size);
         if (new_ptr == NULL)
+        {
+            my_log("[ERROR] - Malloc failed.\n");
             return NULL;
-
+        }
+        my_log("== END REALLOC ==\n");
         return new_ptr;
     }
     else if(size == 0)
     {
-        my_log("[INFO] - Size is 0, pointer freed.\n");
+        my_log("[INFO] - Size is 0, pointer freed (%p).\n", ptr);
         my_free(ptr);
+        my_log("== END REALLOC ==\n");
         return NULL;
     }
 
-    // search for the metadata associated with this pointer
+    // Search for the metadata associated with this pointer
     HeapMetadataInfos metadata = meta_head;
     while (metadata != NULL && metadata->data_ptr != ptr)
         metadata = metadata->next;
 
-    // check that the pointer passed as a parameter is valid
+    // Check that the pointer passed as a parameter is valid
     if (metadata == NULL)
     {
-        my_log("[ERROR] Invalid pointer (%p) given to realloc. realloc aborted!\n", ptr);
+        my_log("[ERROR] - Invalid pointer (%p) given to realloc. Realloc aborted!\n", ptr);
         return NULL;
     }
 
     new_ptr = my_malloc(size);
-    if(new_ptr == NULL) 
+    if(new_ptr == NULL)
     {
-        my_free(ptr);
+        my_log("[ERROR] - Malloc failed. Old pointer (%p) is not freed.\n", ptr);
         return NULL;
     }
 
     // Copy old data from old address to new address
     char *data = (char*) metadata->data_ptr;
     char *new_data = (char*) new_ptr;
-    memcpy(new_data, data, metadata->size);
+    // If the new size is larger than the old size, the added memory will not be initialized
+    size_t copy_size = (metadata->size < size) ? metadata->size : size;
+    memcpy(new_data, data, copy_size);
 
-    // We free the memory located at the old address
-    my_log("[INFO] - Memory located to old address %p is freed.\n", ptr);
+    // Free the memory located at the old address
+    my_log("[INFO] - Memory located at old address %p is freed.\n", ptr);
     my_free(ptr);
-    
+
     my_log("== END REALLOC ==\n");
     return new_ptr;
 }
+
 
 #if DYNAMIC
 
