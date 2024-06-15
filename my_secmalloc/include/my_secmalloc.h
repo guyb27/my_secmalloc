@@ -1,5 +1,5 @@
-#ifndef _MY_SECMALLOC_H
-#define _MY_SECMALLOC_H
+#ifndef MY_SECMALLOC_H
+#define MY_SECMALLOC_H
 
 #include <stdlib.h>
 

@@ -1,19 +1,12 @@
-#ifndef _MY_SECMALLOC_PRIVATE_H
-#define _MY_SECMALLOC_PRIVATE_H
-
-//#define DYNAMIC true
+#ifndef MY_SECMALLOC_PRIVATE_H
+#define MY_SECMALLOC_PRIVATE_H
 
 #define META_SIZE next_hexa_base(sizeof(struct Heap_Metadata_Infos))
 #define CANARY_SIZE sizeof(long)
-
 #define PAGE_SIZE 4096
-
 #define BASE_ADDR PAGE_SIZE*1000
-
 #define POOL_METADATA_SIZE PAGE_SIZE*(10000)
-//#define POOL_METADATA_SIZE PAGE_SIZE
 #define POOL_MEMORY_SIZE PAGE_SIZE*100000
-//#define POOL_MEMORY_SIZE PAGE_SIZE*1000
 
 typedef enum {
     FREE,
