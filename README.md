@@ -19,7 +19,7 @@ Il vous sera nécessaire de vérifier que chacun de ces outils sont installés s
 - [criterion](https://criterion.readthedocs.io/en/master/setup.html) build et installé dans le `/usr` avec ses dépendances
 - [gef](https://github.com/hugsy/gef) et [valgrind](https://valgrind.org/downloads/current.html) pour le debugging et qui vous seront donc d'une grande aide si vous souhaitez contribuer au projet
 
-### Etapes pour construire le projet et accéder à l'exécutable
+### Etapes pour construire le projet et utiliser l'allocateur
 #### Construction du projet
 ```bash
 git clone git@github.com:guyb27/my_secmalloc.git
