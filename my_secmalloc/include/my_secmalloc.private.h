@@ -4,7 +4,7 @@
 //#define DYNAMIC true
 
 #define META_SIZE sizeof(struct Heap_Metadata_Infos)
-#define CANARY_SIZE sizeof(int)
+#define CANARY_SIZE sizeof(long)
 
 #define PAGE_SIZE 4096
 
@@ -25,7 +25,6 @@ typedef struct Heap_Metadata_Infos {
     size_t size;//taille de la zone memoire associee a cette structure
     MemoryState state;//LIBRE OU OCCUPEE
     long i64_canary;//CANARY DE SECURITE ANTI-BUFFER OVERFLOW POUR LES NEWBIE
-    size_t memory_mmap_number;//NUMERO DE CALL A MMAP AFIN D IDENTIFIER FACILEMENT LA STRUCTURE t_mmap_info (desole d avoir crier, CAPSLOCK)
     struct Heap_Metadata_Infos *prev;
     struct Heap_Metadata_Infos *next;
 } Heap_Metadata_Infos, *HeapMetadataInfos;

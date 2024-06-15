@@ -165,7 +165,8 @@ int init_my_malloc()
 int add_heap_metadata_segment(HeapMetadataInfos current_meta, int size) {
     my_log("[INFO] - Add metadata segment at %p.\n", current_meta);
     HeapMetadataInfos next_struct;
-    size_t size_with_padding = next_hexa_base(size + CANARY_SIZE);
+    size_t size_with_padding = next_hexa_base(size);
+    size_t total_size = size_with_padding + CANARY_SIZE;
     
     next_struct = (HeapMetadataInfos)(next_meta_ptr);
     next_meta_ptr += sizeof(Heap_Metadata_Infos);
@@ -243,23 +244,10 @@ void* my_malloc(size_t size)
         if (current_meta->state == FREE && current_meta->size >= (size + CANARY_SIZE))
         {
             my_log("[INFO] - Metadata at %p for data at %p in datapool is free with %zu bytes availables.\n", current_meta, current_meta->data_ptr, current_meta->size);
-
-            // split memory if necessary
-            //if (current_meta->size > (size + CANARY_SIZE))
-            //    add_heap_metadata_segment(current_meta, size);
-            
-            //my_log("== END MALLOC ==\n");
-            // Return a pointer to the allocated area (after the metadata)
-            //return current_meta->data_ptr;
             break;
         }
-        
-        //if (current_meta->next != NULL && current_meta->next != current_meta)
             current_meta = current_meta->next;
-        //else
-          //  b_isIterating = false;
     }
-    //my_log("[INFO] - No available existing block found.\n");
 
     my_log("[INFO] - Checking data pool size to know if it needs to grows.\n");
     if (current_meta->size < size)
