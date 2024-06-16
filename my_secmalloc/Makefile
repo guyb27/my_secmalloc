@@ -1,6 +1,6 @@
 # Variables de compilation
 CC = gcc
-CFLAGS = -Wall -Wextra -g -fPIC
+CFLAGS = -Wall -Wextra -g3 -fPIC
 LDFLAGS_SHARED = -shared -Wl,--version-script=libmy_secmalloc.map
 
 # Répertoires
