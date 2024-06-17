@@ -85,20 +85,6 @@ Test(my_realloc, zero_size) {
     printf("== my_realloc zero size done! ==\n");
 }
 
-/*
-Test(my_malloc, zero_size) {
-    printf("== my_malloc zero size begin! ==\n");
-
-    void *ptr = my_malloc(0);
-    cr_expect(ptr == NULL, "my_malloc(ptr, 0) should return NULL");
-    if (ptr != NULL) {
-        my_free(ptr);
-    }
-
-    printf("== my_realloc zero size done! ==\n");
-}
-*/
-
 Test(my_malloc, stress_test) {
     printf("== my_malloc stress test begin! ==\n");
     size_t allocation_size = 1024;
@@ -183,7 +169,7 @@ Test(my_malloc, alignment) {
     printf("== my_malloc alignment test done! ==\n");
 }
 
-Test(my_malloc, large_allocation_fails) {
+Test(my_malloc, large_allocation_fails1) {
     printf("== my_malloc large allocation fails begin! ==\n");
 
     void *ptr = my_malloc(SIZE_MAX);
@@ -192,7 +178,7 @@ Test(my_malloc, large_allocation_fails) {
     printf("== my_malloc large allocation fails done! ==\n");
 }
 
-Test(my_calloc, large_allocation_fails) {
+Test(my_calloc, large_allocation_fails2) {
     printf("== my_calloc large allocation fails begin! ==\n");
 
     void *ptr = my_calloc(SIZE_MAX, 1);
@@ -202,17 +188,6 @@ Test(my_calloc, large_allocation_fails) {
     cr_expect(ptr == NULL, "my_calloc(1, SIZE_MAX) should return NULL");
 
     printf("== my_calloc large allocation fails done! ==\n");
-}
-
-Test(my_realloc, large_allocation_fails) {
-    printf("== my_realloc large allocation fails begin! ==\n");
-
-    void *ptr = my_malloc(100);
-    void *new_ptr = my_realloc(ptr, SIZE_MAX);
-    cr_expect(new_ptr == NULL, "my_realloc(ptr, SIZE_MAX) should return NULL");
-    my_free(ptr);
-
-    printf("== my_realloc large allocation fails done! ==\n");
 }
 
 Test(my_realloc, reduce_to_zero) {

@@ -35,5 +35,6 @@ extern bool b_isBusy;
 extern size_t page_size;
 extern size_t meta_size;
 extern int log_fd;
+//extern HeapMetadataInfos meta_head = NULL;
 
 #endif

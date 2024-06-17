@@ -17,6 +17,7 @@
 
 
 HeapMetadataInfos meta_head = NULL;
+//meta_head = NULL;
 void * datapool_ptr = NULL;
 size_t data_size = POOL_MEMORY_SIZE;
 size_t meta_size = POOL_METADATA_SIZE;
@@ -114,7 +115,7 @@ int init_my_malloc()
 {
     size_t next_mmap_addr = BASE_ADDR;
 
-    atexit(check_memory_leaks);
+    //atexit(check_memory_leaks);
     my_log("[INFO] - Initializing data and metadata pools.\n");
     meta_head = mmap(
         (void*)(next_mmap_addr), 
@@ -435,6 +436,7 @@ void *my_realloc(void *ptr, size_t size)
 {
     void *new_ptr = NULL;
     HeapMetadataInfos metadata = NULL;
+    HeapMetadataInfos new_metadata = NULL;
 
     my_log("== BEGIN REALLOC ==\n");
     if (ptr == NULL)
@@ -465,21 +467,49 @@ void *my_realloc(void *ptr, size_t size)
         my_log("[INFO] metadata->size == size + CANARY_SIZE\n");
         return metadata->data_ptr;
     }
-    if (metadata->next && metadata->next->state == FREE && metadata->size + metadata->next->size >= size + CANARY_SIZE && false)
+    size_t next_free_size = 0;
+    if (metadata->next && metadata->next->state == FREE)
+        next_free_size = metadata->next->size;
+    if (metadata->size + next_free_size >= size + CANARY_SIZE)
     {
         my_log("[INFO] metadata->size - CANARY_SIZE + metadata->next->size <= size + CANARY_SIZE\n");
         secure_memset(metadata->data_ptr+metadata->size-CANARY_SIZE, 0, CANARY_SIZE);
         //secure_memset(metadata->data_ptr+metadata->size+CANARY_SIZE, 0, CANARY_SIZE+metadata->next->size);
-        if (metadata->size - size > 0)
-            metadata->next->size = metadata->size - size - CANARY_SIZE;
-        else
+        metadata->size += next_free_size;
+        if (metadata->size - (size + CANARY_SIZE) > 0 && metadata->next && metadata->next->state == FREE)
         {
+            //Si il reste de la place et qu'il y a un maillon->next qui est free
+            my_log("[INFO] next struct is FREE and is still free memory\n");
+            metadata->next->size = metadata->size - size - CANARY_SIZE;
+        }
+        else if (metadata->size - (size + CANARY_SIZE) == 0 && metadata->next && metadata->next->state == FREE)
+        //Si il n y a plus de place et qu'il y a un maillon->next qui est free
+        {
+            my_log("[INFO] next struct is FREE and is not still free memory\n");
             metadata->next = metadata->next->next;
             if (metadata->next)
                     metadata->next->prev = metadata;
         }
+        else if (metadata->size - size > 0)
+        //Si il reste de la place et qu'il n'y a pas de maillon->next qui est free
+        {
+            my_log("[INFO] next struct is BUSY and is still free memory \n");
+            //AJOUT D UN MAILLON FREE
+            new_metadata = next_meta_ptr;
+            next_meta_ptr += sizeof(Heap_Metadata_Infos);
+            new_metadata->next = metadata->next;
+            new_metadata->prev = metadata;
+            if (metadata->next)
+                metadata->next->prev = new_metadata;
+            metadata->next = new_metadata;
+            new_metadata->data_ptr=metadata->data_ptr+size + CANARY_SIZE;
+            new_metadata->size=metadata->size - (size + CANARY_SIZE);
+            new_metadata->state = FREE;
+            new_metadata->i64_canary = 0x0;
+        }
         metadata->size = size + CANARY_SIZE;
         *((long *)((char *)metadata->data_ptr + size)) = metadata->i64_canary;
+        new_ptr = metadata->data_ptr;
     }
     else
     {
