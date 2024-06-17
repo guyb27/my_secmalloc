@@ -49,7 +49,6 @@ $(BUILD_DIR)/my_secmalloc.sh: $(BUILD_DIR)
 	@chmod +x $@
 
 # Construction et exécution des tests
-test: CFLAGS += -DDYNAMIC
 test: static $(BUILD_DIR)/test/test
 
 $(BUILD_DIR)/test/test: $(BUILD_DIR) $(LIB_DIR) $(OBJ_DIR) $(BUILD_DIR)/test $(OBJ_DIR)/my_secmalloc.o
