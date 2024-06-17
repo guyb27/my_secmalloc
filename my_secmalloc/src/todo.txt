@@ -1,6 +1,9 @@
-[V] Ajouter la variable next_mmap_addr
-[V] Ajouter la structure t_mmap_info
-[ ] Integrer la structure t_mmap_info (pour que le mremap fonctionne correctement)
-[V] Faire le mmap correctement
-[ ] Faire le mremap correctement (Il faut integrer la structure t_mmap_info avant)
-[ ] Mettre les bonnes adresses au bon endroit
+[V] Ajouter le canary dans la size et le prendre en compte a chaque comparaison de metadata->size
+[ ] realloc: chercher dans les structs de meta-data si il n y a pas une structure free qui suis celle en cours
+[ ] Avant de faire un mremap pour les structures, verifier que la memoire approprie est saturee
+[V] malloc(0) doit retourner NULL
+[ ] Est-ce que je garde une struct vide si sa memoire est de 0 ou < CANARY_SIZE
+    => Oui comme ca pas besoin de patch, on fait toujours un mremap quand on a pas trouver une struct free
+        et que la derniere est busy
+
+[ ] Quand on fait un make clean all, le dynamique ne va pas avoir les bon symbole

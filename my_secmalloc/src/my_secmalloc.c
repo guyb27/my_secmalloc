@@ -303,7 +303,6 @@ void* my_malloc(size_t size)
     HeapMetadataInfos current_meta = NULL;
     size_t real_size = size;
 
-    size = next_hexa_base(size);
     my_log("== BEGIN MALLOC [%zu] ==\n", actual_malloc_number);
     my_log("[INFO] - MALLOC called with size %zu rounded to %zu.\n", real_size, size);
     if ((int) size <= 0)
@@ -311,6 +310,7 @@ void* my_malloc(size_t size)
         my_log("[ERROR] - size doesn't possess a valid value.\n");
         return NULL;
     }
+    size = next_hexa_base(size);
     if ( ! meta_head)
     {
         if (init_my_malloc())
@@ -460,20 +460,45 @@ void *my_realloc(void *ptr, size_t size)
         my_log("[ERROR] Invalid pointer (%p) given to realloc. realloc aborted!\n", ptr);
         return NULL;
     }
-    new_ptr = my_malloc(size);
-    if(new_ptr == NULL) 
+    if (metadata->size == size + CANARY_SIZE)
     {
-        my_log("[ERROR] - my_realloc don't memcpy the data and return a NULL pointer\n", ptr);
-        my_free(ptr);
-        return NULL;
+        my_log("[INFO] metadata->size == size + CANARY_SIZE\n");
+        return metadata->data_ptr;
     }
-    // Copy old data from old address to new address
-    char *data = (char*) metadata->data_ptr;
-    char *new_data = (char*) new_ptr;
-    memcpy(new_data, data, metadata->size);
-    // We free the memory located at the old address
-    my_log("[INFO] - Memory located to old address %p is freed.\n", ptr);
-    my_free(ptr);
+    if (metadata->next && metadata->next->state == FREE && metadata->size + metadata->next->size >= size + CANARY_SIZE && false)
+    {
+        my_log("[INFO] metadata->size - CANARY_SIZE + metadata->next->size <= size + CANARY_SIZE\n");
+        secure_memset(metadata->data_ptr+metadata->size-CANARY_SIZE, 0, CANARY_SIZE);
+        //secure_memset(metadata->data_ptr+metadata->size+CANARY_SIZE, 0, CANARY_SIZE+metadata->next->size);
+        if (metadata->size - size > 0)
+            metadata->next->size = metadata->size - size - CANARY_SIZE;
+        else
+        {
+            metadata->next = metadata->next->next;
+            if (metadata->next)
+                    metadata->next->prev = metadata;
+        }
+        metadata->size = size + CANARY_SIZE;
+        *((long *)((char *)metadata->data_ptr + size)) = metadata->i64_canary;
+    }
+    else
+    {
+        my_log("[INFO] Not enouht space in the last FREE metadata structure, a new malloc is call with a memcpy\n");
+        new_ptr = my_malloc(size);
+        if(new_ptr == NULL) 
+        {
+            my_log("[ERROR] - my_realloc don't memcpy the data and return a NULL pointer\n", ptr);
+            my_free(ptr);
+            return NULL;
+        }
+        // Copy old data from old address to new address
+        char *data = (char*) metadata->data_ptr;
+        char *new_data = (char*) new_ptr;
+        memcpy(new_data, data, metadata->size);
+        // We free the memory located at the old address
+        my_log("[INFO] - Memory located to old address %p is freed.\n", ptr);
+        my_free(ptr);
+    }
     my_log("== END REALLOC ==\n");
     return new_ptr;
 }
