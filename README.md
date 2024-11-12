@@ -35,7 +35,7 @@ cd my_secmalloc/my_secmalloc
   dynamic library, you'll see that the malloc, free, realloc and calloc functions aren't present, so you'll need to do a make dynamic
   or make clean dynamic (if lib.so has already been built) to get a working dynamic library (a patch is currently under development)*.
 
-You can also directly download the libraries on our repository [here](https://github.com/guyb27/my_secmalloc)!
+You can also directly download the libraries on our repository [here](https://github.com/guyb27/my_secmalloc/releases/tag/v0.1.0)!
 
 #### How to use the allocator with a utility/program?
 By default, the program saves its logs in a default file named ``default_log.txt``. The log file is determined by the ``MSM_OUTPUT`` environment variable, which you are free to modify.
